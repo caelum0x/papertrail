@@ -1,0 +1,49 @@
+[
+  {
+    "id": "demo-hero-catch-lecanemab",
+    "claim": "In the CLARITY-AD trial, lecanemab slowed cognitive decline by 27% and the drug caused brain swelling (ARIA-E edema) in 21.3% of patients.",
+    "source_type": "pubmed",
+    "source_external_id": "36449413",
+    "source_url": "https://pubmed.ncbi.nlm.nih.gov/36449413/",
+    "expected_discrepancy_type": "magnitude_overstated",
+    "expected_flagged_substrings": [
+      "difference, -0.45",
+      "amyloid-related imaging abnormalities with edema or effusions in 12.6%"
+    ],
+    "verbatim_source_quotes": [
+      "The adjusted least-squares mean change from baseline at 18 months was 1.21 with lecanemab and 1.66 with placebo (difference, -0.45; 95% confidence interval [CI], -0.67 to -0.23; P<0.001).",
+      "Lecanemab resulted in infusion-related reactions in 26.4% of the participants and amyloid-related imaging abnormalities with edema or effusions in 12.6%.",
+      "Lecanemab reduced markers of amyloid in early Alzheimer's disease and resulted in moderately less decline on measures of cognition and function than placebo at 18 months but was associated with adverse events."
+    ],
+    "notes": "HERO CATCH (neurodegeneration). Source: van Dyck et al., Lecanemab in Early Alzheimer's Disease, NEJM 2023;388(1):9-21, PMID 36449413, DOI 10.1056/NEJMoa2212948. Two verified overstatements: (1) The abstract reports the primary result as a CDR-SB difference of -0.45 points at 18 months; the widely-quoted '27% relative slowing' is a derived figure that does NOT appear in the abstract, so a claim stating '27%' as fact overstates what the source text supports. (2) The claim mislabels the ARIA-E (edema/effusions) rate as 21.3%; the abstract states edema/effusions occurred in 12.6%. 21.3% is the commonly-cited COMBINED any-ARIA figure and does not appear in this abstract at all. Both flagged substrings are exact, verbatim substrings of the abstract Results section confirmed on the PubMed record. Could alternatively classify as caveat_dropped if the pipeline treats the 27% as source-derived; magnitude_overstated is the primary expectation because the ARIA figure is inflated ~1.7x and attributed to the wrong category."
+  },
+  {
+    "id": "demo-green-pass-sprint",
+    "claim": "In SPRINT, intensively lowering systolic blood pressure to below 120 mm Hg in adults at increased cardiovascular risk without diabetes reduced the primary composite cardiovascular outcome, with a hazard ratio of 0.75 versus a target below 140 mm Hg.",
+    "source_type": "pubmed",
+    "source_external_id": "26551272",
+    "source_url": "https://pubmed.ncbi.nlm.nih.gov/26551272/",
+    "expected_discrepancy_type": "accurate",
+    "expected_flagged_substrings": [],
+    "verbatim_source_quotes": [
+      "We randomly assigned 9361 persons with a systolic blood pressure of 130 mm Hg or higher and an increased cardiovascular risk, but without diabetes, to a systolic blood-pressure target of less than 120 mm Hg (intensive treatment) or a target of less than 140 mm Hg (standard treatment).",
+      "The intervention was stopped early after a median follow-up of 3.26 years owing to a significantly lower rate of the primary composite outcome in the intensive-treatment group than in the standard-treatment group (1.65% per year vs. 2.19% per year; hazard ratio with intensive treatment, 0.75; 95% confidence interval [CI], 0.64 to 0.89; P<0.001).",
+      "The primary composite outcome was myocardial infarction, other acute coronary syndromes, stroke, heart failure, or death from cardiovascular causes."
+    ],
+    "notes": "GREEN PASS (cardiovascular). Source: SPRINT Research Group, A Randomized Trial of Intensive versus Standard Blood-Pressure Control, NEJM 2015;373(22):2103-2116, PMID 26551272, DOI 10.1056/NEJMoa1511939. The claim is stated precisely to match the abstract: intervention target <120 vs <140 mm Hg, population at increased CV risk WITHOUT diabetes, primary COMPOSITE cardiovascular outcome, hazard ratio 0.75. Deliberately does NOT mislabel SPRINT as a heart-failure trial (heart failure is one component of the composite, not the population). Every number is verbatim from the abstract Results. Expected: accurate, no flagged substrings."
+  },
+  {
+    "id": "demo-honest-abstention-sprint-mismatch",
+    "claim": "Dapagliflozin reduced the risk of worsening heart failure in patients with heart failure and a reduced ejection fraction, with a hazard ratio of 0.75.",
+    "source_type": "pubmed",
+    "source_external_id": "26551272",
+    "source_url": "https://pubmed.ncbi.nlm.nih.gov/26551272/",
+    "expected_discrepancy_type": "no_support_found",
+    "expected_flagged_substrings": [],
+    "verbatim_source_quotes": [
+      "We randomly assigned 9361 persons with a systolic blood pressure of 130 mm Hg or higher and an increased cardiovascular risk, but without diabetes, to a systolic blood-pressure target of less than 120 mm Hg (intensive treatment) or a target of less than 140 mm Hg (standard treatment).",
+      "The intervention was stopped early after a median follow-up of 3.26 years owing to a significantly lower rate of the primary composite outcome in the intensive-treatment group than in the standard-treatment group (1.65% per year vs. 2.19% per year; hazard ratio with intensive treatment, 0.75; 95% confidence interval [CI], 0.64 to 0.89; P<0.001)."
+    ],
+    "notes": "HONEST ABSTENTION near-miss (cardiovascular). The claim is superficially plausible and even cites a hazard ratio (0.75) that happens to match the cited source's number, but the cited source (SPRINT, PMID 26551272) studies a COMPLETELY DIFFERENT intervention (blood-pressure lowering targets, not dapagliflozin/SGLT2 inhibition) and a different question (composite CV outcome in non-diabetic hypertensives, not worsening heart failure in HFrEF). The correct behavior is to abstain with no_support_found rather than be seduced by the matching 0.75 hazard ratio: the source does not test dapagliflozin and does not study an HFrEF population. This guards against the failure mode where numeric coincidence produces a false 'confident' match. expected_flagged_substrings is empty because abstention means no per-span contradiction is asserted against the source."
+  }
+]

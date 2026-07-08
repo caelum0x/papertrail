@@ -1,0 +1,32 @@
+[
+  {
+    "id": "accurate-1",
+    "claim": "In a randomized trial, an SGLT2 inhibitor reduced hospitalization for heart failure by approximately 30% in adults with heart failure and reduced ejection fraction.",
+    "expected_discrepancy_type": "accurate",
+    "notes": "Matches known DAPA-HF-style trial framing closely; used to confirm the pipeline doesn't over-flag correct claims."
+  },
+  {
+    "id": "magnitude-overstated-1",
+    "claim": "This drug cuts the risk of major cardiovascular events in half.",
+    "expected_discrepancy_type": "magnitude_overstated",
+    "notes": "Pair with a source reporting a more modest relative risk reduction (e.g. 15-20%) to confirm the agent catches inflation."
+  },
+  {
+    "id": "population-overgeneralized-1",
+    "claim": "This treatment is effective for all patients with type 2 diabetes.",
+    "expected_discrepancy_type": "population_overgeneralized",
+    "notes": "Pair with a source restricted to a specific subgroup (e.g. patients with prior cardiovascular disease) to confirm detection."
+  },
+  {
+    "id": "caveat-dropped-1",
+    "claim": "The therapy significantly improved survival outcomes.",
+    "expected_discrepancy_type": "caveat_dropped",
+    "notes": "Pair with a source where the survival benefit was only significant in a secondary/exploratory analysis, not the primary endpoint."
+  },
+  {
+    "id": "no-support-1",
+    "claim": "Daily consumption of a specific vitamin supplement prevents all forms of cancer.",
+    "expected_discrepancy_type": "no_support_found",
+    "notes": "Deliberately implausible/overbroad claim with no specific trial to match against - confirms the agent doesn't force a match."
+  }
+]
