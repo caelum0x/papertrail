@@ -171,3 +171,134 @@ export async function runEvidencePipeline(
     report: synthesis.report,
   };
 }
+
+// ===========================================================================
+// EVIDENCE-SUFFICIENCY GATE — ADDITIVE deterministic loop control.
+//
+// Retrieval + RAG-Fusion answer "did we find the right sources?". This gate
+// answers the other half: "do we have ENOUGH grounded evidence to conclude, or
+// should we run another retrieval pass?". It is DETERMINISTIC — no LLM — and
+// decides purely by field-standard thresholds over numbers the deterministic
+// engines already produced (pooled study count, participant total, I²) plus a
+// contradiction-resolution flag the caller supplies.
+//
+// Thresholds (mirroring backend/engines/R2R/PAPERTRAIL.md):
+//   - at least 3 pooled studies
+//   - total participants >= 100
+//   - heterogeneity I² < 75%
+//   - contradictions resolved (none open)
+//
+// It never concludes on its own — it returns { sufficient, reasons } so the
+// caller can decide to synthesise (sufficient) or widen retrieval (insufficient).
+// This block adds new exports ONLY; it does not change runEvidencePipeline or any
+// existing export. Pure: no I/O, no mutation.
+// ===========================================================================
+
+// Field-standard sufficiency thresholds. Named constants (no magic numbers) so a
+// reviewer can audit exactly what "enough evidence" means here.
+export const MIN_STUDIES = 3;
+export const MIN_PARTICIPANTS = 100;
+export const MAX_I_SQUARED = 75; // percent
+
+// Structural input to the gate. Kept decoupled from any DB row / report internals
+// so a route can assemble it from an EvidencePipelineResult plus the source rows'
+// enrollment counts and an open-contradiction count. Every field is explicit.
+export interface EvidenceSufficiencyInput {
+  // Number of studies that actually pooled (e.g. report.pooled.k, or the count of
+  // extracted studies). NOT the number of sources retrieved.
+  pooledStudies: number;
+  // Sum of participants across the pooled studies (e.g. Σ enrollment_count).
+  totalParticipants: number;
+  // Pooled heterogeneity I² in percent (e.g. report.pooled.heterogeneity.iSquared).
+  // Null when it could not be computed (fewer than the studies needed) — treated
+  // as a failed criterion, since un-assessable heterogeneity is not "< 75%".
+  iSquared: number | null;
+  // Count of contradictions between sources that remain OPEN (unresolved). 0 means
+  // all detected contradictions have been resolved (or none were detected).
+  openContradictions: number;
+}
+
+export interface EvidenceSufficiencyResult {
+  sufficient: boolean;
+  reasons: string[];
+  // Per-criterion detail so the caller can render exactly what passed/failed.
+  criteria: {
+    enoughStudies: boolean;
+    enoughParticipants: boolean;
+    acceptableHeterogeneity: boolean;
+    contradictionsResolved: boolean;
+  };
+}
+
+/**
+ * Deterministic evidence-sufficiency gate: decide whether a synthesis has enough
+ * grounded evidence to conclude, or needs another retrieval pass.
+ *
+ * Evaluates four field-standard criteria — at least 3 pooled studies, >= 100 total
+ * participants, I² < 75%, and all contradictions resolved — and returns
+ * `sufficient` (all pass) plus a `reasons` array naming exactly which criteria
+ * failed. NO LLM: purely thresholds over numbers the deterministic engines already
+ * produced. When `sufficient` is false the caller should widen retrieval (e.g. run
+ * another RAG-Fusion pass) rather than concluding on thin evidence — the house rule
+ * that an honest "insufficient" beats a forced low-confidence verdict. Pure: no I/O,
+ * does not mutate its input.
+ */
+export function evidenceSufficiency(
+  input: EvidenceSufficiencyInput
+): EvidenceSufficiencyResult {
+  const reasons: string[] = [];
+
+  const enoughStudies = input.pooledStudies >= MIN_STUDIES;
+  if (!enoughStudies) {
+    reasons.push(
+      `Only ${input.pooledStudies} pooled ${
+        input.pooledStudies === 1 ? "study" : "studies"
+      } — at least ${MIN_STUDIES} are needed to conclude.`
+    );
+  }
+
+  const enoughParticipants = input.totalParticipants >= MIN_PARTICIPANTS;
+  if (!enoughParticipants) {
+    reasons.push(
+      `Only ${input.totalParticipants} total participants — at least ${MIN_PARTICIPANTS} are needed to conclude.`
+    );
+  }
+
+  // Un-assessable heterogeneity (null) is NOT treated as acceptable: we cannot
+  // assert I² < 75% when I² is unknown, so the criterion honestly fails.
+  const acceptableHeterogeneity =
+    input.iSquared !== null && input.iSquared < MAX_I_SQUARED;
+  if (!acceptableHeterogeneity) {
+    reasons.push(
+      input.iSquared === null
+        ? `Heterogeneity (I²) could not be assessed — it must be below ${MAX_I_SQUARED}% to conclude.`
+        : `Heterogeneity is high (I²=${input.iSquared}%) — it must be below ${MAX_I_SQUARED}% to conclude.`
+    );
+  }
+
+  const contradictionsResolved = input.openContradictions <= 0;
+  if (!contradictionsResolved) {
+    reasons.push(
+      `${input.openContradictions} unresolved ${
+        input.openContradictions === 1 ? "contradiction" : "contradictions"
+      } between sources — resolve them before concluding.`
+    );
+  }
+
+  const sufficient =
+    enoughStudies &&
+    enoughParticipants &&
+    acceptableHeterogeneity &&
+    contradictionsResolved;
+
+  return {
+    sufficient,
+    reasons,
+    criteria: {
+      enoughStudies,
+      enoughParticipants,
+      acceptableHeterogeneity,
+      contradictionsResolved,
+    },
+  };
+}

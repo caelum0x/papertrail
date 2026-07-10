@@ -20,6 +20,7 @@
 // them as declared inputs rather than guessing.
 
 import { z } from "zod";
+import { eggersTest, trimAndFill, type StudyEffect } from "./publicationBias";
 
 // ---------------------------------------------------------------------------
 // Certainty levels, ordered from most to least certain. The index is the number
@@ -116,6 +117,23 @@ export const gradeInputSchema = z
     riskOfBiasSteps: z.number().int().min(0).max(2).optional(),
     indirectnessSteps: z.number().int().min(0).max(2).optional(),
     publicationBiasSteps: z.number().int().min(0).max(2).optional(),
+    // OPTIONAL, ADDITIVE: the per-study log effects (label, yi, vi) behind the
+    // pooled estimate. When supplied AND the caller has NOT explicitly set
+    // `publicationBiasSteps`, GRADE runs Egger's test for funnel-plot asymmetry
+    // over these studies and AUTO-DOWNGRADES certainty one step for publication
+    // bias on detected asymmetry — deterministically, no LLM. When
+    // `publicationBiasSteps` is set, the caller's declared value wins (this input
+    // never overrides an explicit judgement). Omit it to preserve prior behaviour.
+    studyEffects: z
+      .array(
+        z.object({
+          label: z.string().min(1).max(200),
+          yi: z.number().finite(),
+          vi: z.number().positive(),
+        })
+      )
+      .max(1000)
+      .optional(),
   })
   .refine((v) => v.ciUpper >= v.ciLower, {
     message: "ciUpper must be >= ciLower",
@@ -216,6 +234,44 @@ function imprecisionDowngrade(input: GradeInput): Downgrade | null {
   };
 }
 
+// ADDITIVE: derive the publication-bias downgrade from the per-study effects,
+// used ONLY when the caller supplied `studyEffects` and did NOT set an explicit
+// `publicationBiasSteps`. Runs Egger's regression test for funnel-plot asymmetry;
+// on detected asymmetry, downgrades ONE step for publication bias and cites the
+// trim-and-fill bias-adjusted estimate (how far the summary shifts toward the
+// null once the funnel is filled) so the downgrade is fully defensible. Returns
+// null when the test cannot run (fewer than three usable studies) or finds no
+// asymmetry — an honest "no downgrade" rather than a forced one. Deterministic.
+function derivedPublicationBiasDowngrade(
+  studyEffects: readonly StudyEffect[]
+): Downgrade | null {
+  const egger = eggersTest(studyEffects);
+  if (egger === null || !egger.asymmetry) return null;
+
+  const adjusted = trimAndFill(studyEffects);
+  const trimNote =
+    adjusted && adjusted.k0Imputed > 0
+      ? ` Trim-and-fill imputes ${adjusted.k0Imputed} missing ${
+          adjusted.k0Imputed === 1 ? "study" : "studies"
+        } on the ${adjusted.side} side; the bias-adjusted pooled estimate is ${round(
+          adjusted.adjustedPoint,
+          3
+        )} (95% CI ${round(adjusted.adjustedCiLower, 3)}–${round(
+          adjusted.adjustedCiUpper,
+          3
+        )}), shifted toward the null.`
+      : "";
+
+  return {
+    domain: "publication_bias",
+    reason:
+      `Egger's test for funnel-plot asymmetry is significant over ${egger.k} studies ` +
+      `(intercept ${round(egger.intercept, 3)}, p=${round(egger.pValue, 3)}), indicating ` +
+      `possible small-study effects / publication bias — downgrade 1 step.${trimNote}`,
+    steps: 1,
+  };
+}
+
 // Build a downgrade entry for a caller-supplied judgement domain, or null when
 // the caller declared 0 (or omitted) steps for it.
 function judgementDowngrade(d: JudgementDomain): Downgrade | null {
@@ -254,15 +310,25 @@ export function gradeCertainty(rawInput: GradeInput): GradeResult {
   const judgementDomains: JudgementDomain[] = [
     { domain: "risk_of_bias", steps: input.riskOfBiasSteps, label: "Risk of bias" },
     { domain: "indirectness", steps: input.indirectnessSteps, label: "Indirectness" },
-    {
-      domain: "publication_bias",
-      steps: input.publicationBiasSteps,
-      label: "Publication bias",
-    },
   ];
   for (const d of judgementDomains) {
     const dg = judgementDowngrade(d);
     if (dg) downgrades.push(dg);
+  }
+
+  // Publication bias (additive). An explicitly-declared `publicationBiasSteps`
+  // always wins (caller judgement). Otherwise, when per-study `studyEffects` are
+  // supplied, Egger's test decides the downgrade deterministically.
+  if (input.publicationBiasSteps !== undefined) {
+    const declared = judgementDowngrade({
+      domain: "publication_bias",
+      steps: input.publicationBiasSteps,
+      label: "Publication bias",
+    });
+    if (declared) downgrades.push(declared);
+  } else if (input.studyEffects && input.studyEffects.length > 0) {
+    const derived = derivedPublicationBiasDowngrade(input.studyEffects);
+    if (derived) downgrades.push(derived);
   }
 
   const totalSteps = downgrades.reduce((acc, d) => acc + d.steps, 0);

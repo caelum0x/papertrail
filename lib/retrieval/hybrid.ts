@@ -385,3 +385,235 @@ export async function hybridSearch(
 
   return [...topHits, ...expanded].slice(0, finalLimit);
 }
+
+// ===========================================================================
+// RAG-FUSION (biomedical query expansion) — ADDITIVE layer over hybridSearch.
+//
+// A NATIVE TypeScript mirror of backend/engines/R2R/r2r/papertrail_rag_fusion.py.
+// Where hybridSearch fuses two RANKERS (dense + sparse) over ONE query, RAG-Fusion
+// decomposes a query into several biomedical sub-queries (efficacy / safety /
+// mechanism / subgroup), runs the EXISTING hybridSearch per facet, and fuses the
+// several result LISTS with the same Reciprocal Rank Fusion arithmetic.
+//
+// The decomposition is a fixed, auditable TEMPLATE — NOT an LLM generation step —
+// so it is fully deterministic (same query -> same facets, always). The fusion
+// (fuseFacetRankings) is PURE and DETERMINISTIC. This block adds new exports ONLY;
+// it does not change hybridSearch, fuseRankings, or any existing export.
+// ===========================================================================
+
+// The four biomedical facets every claim is decomposed into. Fixed + auditable,
+// mirroring FACETS in papertrail_rag_fusion.py. Each facet is a clinical lens on
+// the SAME underlying claim, not a different question.
+export const RAG_FUSION_FACETS = [
+  "efficacy",
+  "safety",
+  "mechanism",
+  "subgroup",
+] as const;
+export type RagFusionFacet = (typeof RAG_FUSION_FACETS)[number];
+
+// Per-facet cue terms appended to the base query to steer that facet's retrieval.
+// Kept in sync with _FACET_CUES in papertrail_rag_fusion.py.
+export const FACET_CUES: Readonly<Record<RagFusionFacet, readonly string[]>> = {
+  efficacy: [
+    "efficacy",
+    "effect size",
+    "risk reduction",
+    "hazard ratio",
+    "primary endpoint",
+    "relative risk",
+  ],
+  safety: [
+    "safety",
+    "adverse events",
+    "harms",
+    "tolerability",
+    "toxicity",
+    "serious adverse",
+  ],
+  mechanism: [
+    "mechanism of action",
+    "pathway",
+    "target",
+    "pharmacology",
+    "biological mechanism",
+  ],
+  subgroup: [
+    "subgroup",
+    "population",
+    "elderly",
+    "age",
+    "sex",
+    "comorbidity",
+    "stratified analysis",
+  ],
+};
+
+// One facet's deterministic sub-query over the original claim.
+export interface FacetQuery {
+  facet: RagFusionFacet;
+  query: string;
+  cues: readonly string[];
+}
+
+// A source that survived RAG-Fusion: the full source data, its fused RRF score,
+// and which facets ranked it (and at what 1-indexed rank) — the fusion provenance.
+export interface RagFusionHit extends RankedSource {
+  rrfScore: number;
+  facetRanks: Partial<Record<RagFusionFacet, number>>;
+}
+
+// ---------------------------------------------------------------------------
+// decomposeIntoFacets — DETERMINISTIC template decomposition. Preserves the base
+// query verbatim (so a ranker still matches the specifics) and appends each
+// facet's fixed cue terms. A blank query yields an empty list (honest, not four
+// empty facets). Mirror of decompose() in papertrail_rag_fusion.py.
+// ---------------------------------------------------------------------------
+export function decomposeIntoFacets(query: string): FacetQuery[] {
+  const base = query.trim();
+  if (base.length === 0) return [];
+  return RAG_FUSION_FACETS.map((facet) => {
+    const cues = FACET_CUES[facet];
+    return { facet, query: `${base} ${cues.join(" ")}`, cues };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// fuseFacetRankings — PURE N-list Reciprocal Rank Fusion, generalizing R2R's
+// 2-list hybrid fusion to one ranked list per facet. Deterministic; no I/O.
+//
+// For each document across all facet lists:
+//   rrfScore = Σ_facets ( weight_f / (rrfK + rank_f) )
+// where rank_f is the doc's 1-indexed position in facet f's list. A document
+// absent from a facet simply contributes nothing for that facet — it is never
+// penalized with a fabricated rank. Ties break stably on id for determinism.
+// Mirror of reciprocal_rank_fusion() in papertrail_rag_fusion.py.
+// ---------------------------------------------------------------------------
+export interface RagFusionInput {
+  facetLists: Partial<Record<RagFusionFacet, readonly string[]>>;
+  rrfK?: number;
+  facetWeights?: Partial<Record<RagFusionFacet, number>>;
+}
+
+export interface RagFusedRank {
+  id: string;
+  rrfScore: number;
+  facetRanks: Partial<Record<RagFusionFacet, number>>;
+}
+
+export function fuseFacetRankings(input: RagFusionInput): RagFusedRank[] {
+  const rrfK = input.rrfK ?? RRF_K;
+  const scores = new Map<string, number>();
+  const facetRanks = new Map<string, Partial<Record<RagFusionFacet, number>>>();
+
+  for (const facet of RAG_FUSION_FACETS) {
+    const ids = input.facetLists[facet];
+    if (!ids) continue;
+    const weight = input.facetWeights?.[facet] ?? 1.0;
+    const seenInFacet = new Set<string>();
+    ids.forEach((id, index) => {
+      if (seenInFacet.has(id)) return; // first occurrence wins the rank
+      seenInFacet.add(id);
+      const rank = index + 1; // 1-indexed, matching R2R + the Python port
+      scores.set(id, (scores.get(id) ?? 0) + weight / (rrfK + rank));
+      const ranks = facetRanks.get(id) ?? {};
+      ranks[facet] = rank;
+      facetRanks.set(id, ranks);
+    });
+  }
+
+  const fused: RagFusedRank[] = [];
+  for (const [id, rrfScore] of scores) {
+    fused.push({ id, rrfScore, facetRanks: facetRanks.get(id) ?? {} });
+  }
+  return fused.sort((a, b) => {
+    if (b.rrfScore !== a.rrfScore) return b.rrfScore - a.rrfScore;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  });
+}
+
+// Injectable deps for ragFusionRetrieve. `hybrid` defaults to the real
+// hybridSearch so production callers pass nothing; tests inject a stub that
+// returns canned per-facet hits with no DB/embeddings.
+export interface RagFusionDeps extends HybridDeps {
+  // Per-facet retriever. Defaults to the existing hybridSearch export (unchanged).
+  hybrid?: (query: string, deps: HybridDeps) => Promise<HybridHit[]>;
+  // Cap on the fused result set (defaults to DEFAULT_FINAL_LIMIT).
+  finalLimit?: number;
+  facetWeights?: Partial<Record<RagFusionFacet, number>>;
+}
+
+// ---------------------------------------------------------------------------
+// ragFusionRetrieve — the public RAG-Fusion entry point. Decomposes the query
+// into biomedical facets, runs the EXISTING hybridSearch for each facet, fuses
+// the per-facet rankings with RRF, and returns the fused top hits (best first)
+// with per-facet provenance. Additive: reuses hybridSearch verbatim and never
+// alters the tuned dense+sparse hybrid behavior.
+// ---------------------------------------------------------------------------
+export interface RagFusionResult {
+  facets: FacetQuery[];
+  hits: RagFusionHit[];
+}
+
+export async function ragFusionRetrieve(
+  query: string,
+  deps: RagFusionDeps = {}
+): Promise<RagFusionResult> {
+  const trimmed = query.trim();
+  if (trimmed.length === 0) {
+    throw new Error("ragFusionRetrieve: query must be a non-empty string");
+  }
+
+  const facets = decomposeIntoFacets(trimmed);
+  const runHybrid = deps.hybrid ?? hybridSearch;
+  const finalLimit = deps.finalLimit ?? DEFAULT_FINAL_LIMIT;
+
+  // Only forward the HybridDeps subset to the per-facet retriever — the
+  // RAG-Fusion-specific fields (hybrid, facetWeights, finalLimit) are consumed here.
+  const hybridDeps: HybridDeps = {
+    pool: deps.pool,
+    embed: deps.embed,
+    semanticLimit: deps.semanticLimit,
+    fullTextLimit: deps.fullTextLimit,
+    finalLimit: deps.finalLimit,
+    rrfK: deps.rrfK,
+    semanticWeight: deps.semanticWeight,
+    fullTextWeight: deps.fullTextWeight,
+    expandGraph: deps.expandGraph,
+  };
+
+  // Run every facet's hybrid retrieval concurrently — they are independent.
+  const perFacet = await Promise.all(
+    facets.map(async (f) => ({
+      facet: f.facet,
+      hits: await runHybrid(f.query, hybridDeps),
+    }))
+  );
+
+  // Source data lookup keyed by id, so the pure fusion can stay id-only.
+  const byId = new Map<string, RankedSource>();
+  const facetLists: Partial<Record<RagFusionFacet, string[]>> = {};
+  for (const { facet, hits } of perFacet) {
+    facetLists[facet] = hits.map((h) => h.id);
+    for (const h of hits) {
+      if (!byId.has(h.id)) byId.set(h.id, h);
+    }
+  }
+
+  const fused = fuseFacetRankings({
+    facetLists,
+    rrfK: deps.rrfK,
+    facetWeights: deps.facetWeights,
+  });
+
+  const hits: RagFusionHit[] = fused
+    .map((f): RagFusionHit | null => {
+      const source = byId.get(f.id);
+      if (!source) return null;
+      return { ...source, rrfScore: f.rrfScore, facetRanks: f.facetRanks };
+    })
+    .filter((h): h is RagFusionHit => h !== null)
+    .slice(0, finalLimit);
+
+  return { facets, hits };
+}

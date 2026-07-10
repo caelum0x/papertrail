@@ -60,6 +60,7 @@ const NAV_SECTIONS: { title: string; links: { href: string; label: string }[] }[
       { href: "/console/citations", label: "Smart Citations" },
       { href: "/console/graph", label: "Knowledge Graph" },
       { href: "/console/hypotheses", label: "Research Gaps" },
+      { href: "/console/contradiction", label: "Contradiction Atlas" },
     ],
   },
   {
@@ -117,6 +118,7 @@ const NAV_SECTIONS: { title: string; links: { href: string; label: string }[] }[
       { href: "/console/admin/security", label: "Security (XDR)" },
       { href: "/console/billing/tier", label: "Plan & Tiers" },
       { href: "/console/audit", label: "Audit" },
+      { href: "/console/audit/custody", label: "Chain of Custody" },
       { href: "/console/settings", label: "Settings" },
       { href: "/console/admin", label: "Admin" },
     ],

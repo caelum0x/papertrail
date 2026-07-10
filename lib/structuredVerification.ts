@@ -6,6 +6,11 @@
 
 import { TrialResultAnalysis } from "./sources/clinicaltrials";
 import { claimedReductionPercent } from "./effectSize";
+import {
+  verifyAgainstSubgroups,
+  type Subgroup,
+  type SubgroupCheck,
+} from "./subgroupAnalysis";
 
 export type RegistryVerdict =
   | "matches_registry" // claim's magnitude agrees with the registered primary result
@@ -26,6 +31,18 @@ export interface RegistryCheck {
   /** Raw-count-derived stats from the registry (percentage points / count), when available. */
   absoluteRiskReduction: number | null;
   numberNeededToTreat: number | null;
+  /**
+   * Optional subgroup-primacy hardening. Populated only when the caller supplies
+   * subgroup structure + provenance to `checkAgainstRegistry`; otherwise null.
+   * Additive — never affects the registry `verdict` above.
+   */
+  subgroupPrimacy: SubgroupPrimacyCheck | null;
+}
+
+// Optional subgroup context for the additive subgroup-cited-as-primary check.
+export interface SubgroupContext {
+  subgroups: readonly Subgroup[];
+  provenance: readonly SubgroupProvenance[];
 }
 
 // Claimed effect must exceed the registered effect by this factor to be "overstated".
@@ -94,10 +111,12 @@ function absoluteStatsText(a: TrialResultAnalysis): string {
  * including the sponsor's raw-count absolute risk reduction / NNT when available, and
  * detects when a claim's effect matches a secondary — not the primary — endpoint.
  */
-export function checkAgainstRegistry(
+type RegistryCheckCore = Omit<RegistryCheck, "subgroupPrimacy">;
+
+function checkAgainstRegistryCore(
   claim: string,
   analyses: TrialResultAnalysis[]
-): RegistryCheck {
+): RegistryCheckCore {
   if (analyses.length === 0) {
     return {
       verdict: "no_registered_results",
@@ -215,5 +234,218 @@ export function checkAgainstRegistry(
     registeredReductionPercent: round(registeredReduction),
     absoluteRiskReduction: arr,
     numberNeededToTreat: nnt,
+  };
+}
+
+/**
+ * Check a claim against a trial's registered results (see `checkAgainstRegistryCore`
+ * for the registry-verdict logic). This wrapper is strictly additive: it preserves
+ * the original two-argument behaviour and, when the caller ALSO supplies subgroup
+ * structure + provenance, attaches the deterministic subgroup-cited-as-primary
+ * hardening under `subgroupPrimacy`. The subgroup check NEVER changes the registry
+ * `verdict` — it is surfaced alongside it. Pure; no LLM in the loop.
+ */
+export function checkAgainstRegistry(
+  claim: string,
+  analyses: TrialResultAnalysis[],
+  subgroupContext?: SubgroupContext
+): RegistryCheck {
+  const base = checkAgainstRegistryCore(claim, analyses);
+  const subgroupPrimacy =
+    subgroupContext && subgroupContext.subgroups.length > 0
+      ? checkSubgroupCitedAsPrimary(claim, subgroupContext.subgroups, subgroupContext.provenance)
+      : null;
+  return { ...base, subgroupPrimacy };
+}
+
+// ---------------------------------------------------------------------------
+// Subgroup-cited-as-primary hardening.
+//
+// A distinct, higher-severity distortion than "the claim rests on a subgroup":
+// a claim that quotes a SUBGROUP effect and presents it as the PRIMARY /
+// whole-population result, when that subgroup finding is not credible enough to
+// be a primary conclusion — because it was POST-HOC (not pre-specified) and/or
+// the formal test for subgroup differences (the interaction test) is NOT
+// significant. Regulatory guidance (FDA/EMA, ICH E9) treats a post-hoc or
+// non-interaction-supported subgroup effect as hypothesis-generating, never as
+// the trial's headline finding.
+//
+// This wires the existing deterministic subgroup engine (verifyAgainstSubgroups,
+// which runs the between-groups interaction test) and layers the pre-specified /
+// interaction-p provenance the registry cannot encode — all rule-decided, no LLM.
+// ---------------------------------------------------------------------------
+
+// Alpha below which the test for subgroup differences (interaction) is deemed to
+// support a genuine, non-spurious subgroup effect. Mirrors the engine's 0.05.
+const INTERACTION_ALPHA = 0.05;
+
+// Per-subgroup provenance the trial registry does not carry: whether the subgroup
+// was PRE-SPECIFIED in the protocol/SAP, and — when reported — the interaction
+// (test-for-subgroup-differences) p-value for that split. Both are honest,
+// caller-declared inputs from protocol/publication appraisal.
+export interface SubgroupProvenance {
+  name: string;
+  prespecified: boolean;
+  interactionPValue?: number | null;
+}
+
+export type SubgroupPrimacyVerdict =
+  | "subgroup_cited_as_primary" // claim quotes a weak subgroup effect as the primary/whole-population result
+  | "subgroup_effect_credible" // the matched subgroup is pre-specified AND interaction-supported
+  | "reflects_overall_effect" // the claim matches the overall population, not a subgroup
+  | "no_subgroup_match" // the claim's magnitude matches no supplied subgroup
+  | "insufficient_subgroups"; // fewer than two poolable subgroups to contrast
+
+export interface SubgroupPrimacyCheck {
+  verdict: SubgroupPrimacyVerdict;
+  rationale: string;
+  matchedSubgroup: string | null;
+  matchedSubgroupReductionPercent: number | null;
+  overallReductionPercent: number | null;
+  // Why the matched subgroup fails the primacy bar (empty when it does not fail).
+  primacyFailures: ("post_hoc" | "interaction_not_significant")[];
+  prespecified: boolean | null;
+  interactionPValue: number | null;
+  // The underlying deterministic subgroup check, for the citation trail.
+  subgroupCheck: SubgroupCheck;
+}
+
+function round1(n: number): number {
+  return Math.round(n * 10) / 10;
+}
+
+/**
+ * Flag a claim that quotes a SUBGROUP effect but states it as the PRIMARY /
+ * whole-population result, when the subgroup is not credible enough to be primary
+ * (post-hoc, or the interaction test is not significant).
+ *
+ * Deterministic and additive on top of `verifyAgainstSubgroups`: it reuses that
+ * engine's pooled subgroup effects and interaction test, then decides primacy
+ * purely by rule from the caller-declared provenance (`prespecified`,
+ * `interactionPValue`). Fires `subgroup_cited_as_primary` ONLY when the claim's
+ * magnitude matches a subgroup, does NOT match the overall population, and the
+ * matched subgroup fails the primacy bar. Otherwise it defers honestly
+ * (credible subgroup / reflects overall / no match / insufficient data) rather
+ * than over-flagging. No LLM in the loop; pure — does not mutate its inputs.
+ */
+export function checkSubgroupCitedAsPrimary(
+  claim: string,
+  subgroups: readonly Subgroup[],
+  provenance: readonly SubgroupProvenance[]
+): SubgroupPrimacyCheck {
+  const subgroupCheck = verifyAgainstSubgroups(claim, subgroups);
+  const overallReductionPercent = subgroupCheck.overallReductionPercent;
+
+  if (subgroupCheck.verdict === "insufficient_subgroups") {
+    return {
+      verdict: "insufficient_subgroups",
+      rationale: subgroupCheck.rationale,
+      matchedSubgroup: null,
+      matchedSubgroupReductionPercent: null,
+      overallReductionPercent,
+      primacyFailures: [],
+      prespecified: null,
+      interactionPValue: null,
+      subgroupCheck,
+    };
+  }
+
+  // Which subgroup (if any) the claim's magnitude matched, per the engine.
+  const matchedName = subgroupCheck.matchedSubgroup;
+  if (matchedName === null) {
+    return {
+      verdict: "no_subgroup_match",
+      rationale: `The claim's magnitude does not match any single supplied subgroup, so there is no subgroup being cited as the primary result. ${subgroupCheck.rationale}`,
+      matchedSubgroup: null,
+      matchedSubgroupReductionPercent: null,
+      overallReductionPercent,
+      primacyFailures: [],
+      prespecified: null,
+      interactionPValue: null,
+      subgroupCheck,
+    };
+  }
+
+  // The claim matches the OVERALL effect (engine says the claim reflects the
+  // whole population): no subgroup is being passed off as primary.
+  if (subgroupCheck.verdict === "overall_effect_holds") {
+    return {
+      verdict: "reflects_overall_effect",
+      rationale: `The claim's magnitude is consistent with the OVERALL pooled effect, not a single subgroup — it is not a subgroup finding cited as the primary result. ${subgroupCheck.rationale}`,
+      matchedSubgroup: matchedName,
+      matchedSubgroupReductionPercent: subgroupCheck.matchedSubgroupReductionPercent,
+      overallReductionPercent,
+      primacyFailures: [],
+      prespecified: null,
+      interactionPValue: null,
+      subgroupCheck,
+    };
+  }
+
+  // The claim rests on the matched subgroup and NOT the overall population
+  // (engine verdict `subgroup_only_effect`). Now decide primacy from provenance.
+  const prov = provenance.find((p) => p.name === matchedName) ?? null;
+  const prespecified = prov ? prov.prespecified : false;
+  const declaredInteractionP =
+    prov && typeof prov.interactionPValue === "number" ? prov.interactionPValue : null;
+  // Prefer the caller-declared interaction p; otherwise fall back to the engine's
+  // computed between-groups p-value for that split.
+  const interactionPValue =
+    declaredInteractionP ?? subgroupCheck.result?.pValue ?? null;
+
+  const failures: ("post_hoc" | "interaction_not_significant")[] = [];
+  if (!prespecified) failures.push("post_hoc");
+  if (interactionPValue !== null && interactionPValue >= INTERACTION_ALPHA) {
+    failures.push("interaction_not_significant");
+  }
+
+  const matchedRed = subgroupCheck.matchedSubgroupReductionPercent;
+  const overallText =
+    overallReductionPercent !== null ? `~${round1(overallReductionPercent)}%` : "a weaker/absent";
+  const matchedText = matchedRed !== null ? `~${round1(matchedRed)}%` : "its";
+
+  if (failures.length > 0) {
+    const reasons: string[] = [];
+    if (failures.includes("post_hoc")) {
+      reasons.push(
+        `the "${matchedName}" subgroup was POST-HOC (not pre-specified in the protocol/SAP), so its effect is hypothesis-generating, not confirmatory`
+      );
+    }
+    if (failures.includes("interaction_not_significant")) {
+      reasons.push(
+        `the test for subgroup differences is not significant (interaction p=${
+          interactionPValue !== null ? round1(interactionPValue * 1000) / 1000 : "n/a"
+        } ≥ ${INTERACTION_ALPHA}), so the split is not statistically supported`
+      );
+    }
+    return {
+      verdict: "subgroup_cited_as_primary",
+      rationale: `The claim's ${matchedText} reduction matches the "${matchedName}" subgroup, but NOT the overall population (${overallText} reduction), and ${reasons.join(
+        " and "
+      )}. Presenting this subgroup effect as the trial's primary/whole-population result overstates what the trial confirmed.`,
+      matchedSubgroup: matchedName,
+      matchedSubgroupReductionPercent: matchedRed,
+      overallReductionPercent,
+      primacyFailures: failures,
+      prespecified,
+      interactionPValue,
+      subgroupCheck,
+    };
+  }
+
+  // The matched subgroup is pre-specified AND interaction-supported: a credible
+  // subgroup effect. We still note it is a subgroup — not the overall — finding.
+  return {
+    verdict: "subgroup_effect_credible",
+    rationale: `The claim's ${matchedText} reduction matches the pre-specified "${matchedName}" subgroup, and the test for subgroup differences is significant (interaction p=${
+      interactionPValue !== null ? round1(interactionPValue * 1000) / 1000 : "n/a"
+    } < ${INTERACTION_ALPHA}). This is a credible effect-modification finding, though it is a subgroup — not the overall population (${overallText} reduction) — result.`,
+    matchedSubgroup: matchedName,
+    matchedSubgroupReductionPercent: matchedRed,
+    overallReductionPercent,
+    primacyFailures: [],
+    prespecified,
+    interactionPValue,
+    subgroupCheck,
   };
 }

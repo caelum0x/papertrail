@@ -100,6 +100,33 @@ export async function appendToChain(
   }
 }
 
+// Anchor a chain-of-custody hash (from lib/provenance/chainOfCustody.ts) into the
+// org's WORM chain, making the provenance state of a verification tamper-evident
+// and independently reconstructable at audit/export time. Additive: this reuses
+// appendToChain() unchanged, so the anchor is itself hash-linked to prior entries.
+// No claim/source text is included — only the deterministic hashes + identifiers.
+export interface CustodyAnchor {
+  verificationId: string;
+  chainOfCustodyHash: string;
+  sourceId: string | null;
+  spanCount: number;
+}
+
+export async function anchorChainOfCustody(
+  orgId: string,
+  anchor: CustodyAnchor,
+  pool: Pool = getPool()
+): Promise<AuditChainEntry> {
+  const event: Record<string, unknown> = {
+    kind: "chain_of_custody_anchor",
+    verification_id: anchor.verificationId,
+    chain_of_custody_hash: anchor.chainOfCustodyHash,
+    source_id: anchor.sourceId,
+    span_count: anchor.spanCount,
+  };
+  return appendToChain(orgId, event, pool);
+}
+
 export interface ListChainOptions {
   orgId: string;
   limit: number;
