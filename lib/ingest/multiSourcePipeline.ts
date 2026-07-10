@@ -3,6 +3,7 @@ import { embed, toPgVectorLiteral } from "@/lib/embeddings";
 import { canonicalizeSourceEntities } from "@/lib/ingest/entityCanonicalization";
 import {
   recordAccess,
+  recordSourceVersion,
   computeSnapshotId,
   snapshotContentFor,
 } from "@/lib/ingest/provenance";
@@ -273,6 +274,17 @@ async function processRecords(
       license: record.metadata.license ?? null,
       snapshotId,
       sourceVersion: record.metadata.sourceVersion ?? null,
+    });
+
+    // VERSION LEDGER: append an immutable evidence_source_versions row so the Later-tier
+    // chain-of-custody resolves a real content_hash + version + doi/pmid for this source.
+    // pubmed external_ids are PMIDs; a driver may carry a doi in metadata. Best-effort.
+    await recordSourceVersion(pool, {
+      sourceId: rowId,
+      contentHash: snapshotId,
+      sourceVersion: record.metadata.sourceVersion ?? null,
+      doi: typeof record.metadata.doi === "string" ? record.metadata.doi : null,
+      pmid: record.source_type === "pubmed" ? record.external_id : null,
     });
 
     // ENTITY CANONICALIZATION: only for NEW source text. NER (Claude) -> deterministic

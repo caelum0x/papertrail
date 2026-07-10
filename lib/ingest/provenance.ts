@@ -152,6 +152,49 @@ function normalizeOptional(v: string | null | undefined): string | null {
   return t.length > 0 ? t : null;
 }
 
+// ---------------------------------------------------------------------------
+// recordSourceVersion — append a row to the immutable `evidence_source_versions` ledger
+// (migration 0067) for a newly-cached source, so the Later-tier chain-of-custody
+// (lib/provenance/chainOfCustody.ts) resolves a real content_hash + version + doi/pmid
+// per source instead of falling back to source-derived defaults. Append-only, best-effort:
+// a failure NEVER sinks an ingest (the source is already cached). Called once per NEW
+// cached record (the pipeline skips already-cached rows before this point, so no dup risk).
+// ---------------------------------------------------------------------------
+
+export interface RecordVersionInput {
+  sourceId: string;
+  contentHash: string; // the deterministic snapshot id (sha256 of date-less content)
+  sourceVersion?: string | null;
+  doi?: string | null;
+  pmid?: string | null;
+}
+
+export async function recordSourceVersion(
+  pool: Pool,
+  input: RecordVersionInput
+): Promise<boolean> {
+  const sourceId = input.sourceId.trim();
+  if (sourceId.length === 0) return false;
+  try {
+    await pool.query(
+      `insert into evidence_source_versions
+         (source_id, source_version, snapshot_date, doi, pmid, content_hash)
+       values ($1, $2, now(), $3, $4, $5)`,
+      [
+        sourceId,
+        normalizeOptional(input.sourceVersion),
+        normalizeOptional(input.doi),
+        normalizeOptional(input.pmid),
+        normalizeOptional(input.contentHash),
+      ]
+    );
+    return true;
+  } catch {
+    // Table not yet migrated / DB blip — non-fatal; the cached source is unaffected.
+    return false;
+  }
+}
+
 // Append-only provenance log. `accessed_at` defaults in-DB (now()) — the ONLY place a
 // wall-clock value enters provenance, and it is a separate column, never the hash input.
 async function appendAccessLog(
