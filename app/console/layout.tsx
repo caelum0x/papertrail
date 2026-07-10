@@ -33,6 +33,7 @@ const NAV_SECTIONS: { title: string; links: { href: string; label: string }[] }[
       { href: "/console/copilot", label: "Research Copilot" },
       { href: "/console/ask", label: "Ask the Papers" },
       { href: "/console/deep-research", label: "Deep Research" },
+      { href: "/console/query-expansion", label: "Query Expansion" },
       { href: "/console/data-chat", label: "Data Chat" },
       { href: "/console/guideline-audit", label: "Guideline Audit" },
       { href: "/console/draft", label: "Draft Assistant" },
