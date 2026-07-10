@@ -44,6 +44,8 @@ const NAV_SECTIONS: { title: string; links: { href: string; label: string }[] }[
     links: [
       { href: "/console/lab-notebook", label: "Lab Notebook" },
       { href: "/console/trial-matcher", label: "Trial Matcher" },
+      { href: "/console/bio/finding", label: "Finding Verifier" },
+      { href: "/console/ontology", label: "Ontology" },
     ],
   },
   {

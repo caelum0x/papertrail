@@ -10,6 +10,7 @@
     "test": "vitest run",
     "db:migrate": "tsx scripts/migrate.ts",
     "ingest:test-set": "tsx scripts/ingest-test-set.ts",
+    "ingest:ontology": "tsx scripts/ingest-ontology.ts",
     "seed": "tsx scripts/seed-db.ts",
     "eval": "tsx scripts/eval.ts",
     "bench": "tsx scripts/benchmark/run.ts"

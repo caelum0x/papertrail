@@ -10,8 +10,10 @@
 import type { PaperTrailTool } from "../registry.js";
 import { biomedicalCoreTools } from "./biomedicalCore.js";
 import { biomedicalExtraTools } from "./biomedicalExtra.js";
+import { bioDomainTools } from "./bioDomain.js";
 
 export const biomedicalTools: PaperTrailTool[] = [
   ...biomedicalCoreTools,
   ...biomedicalExtraTools,
+  ...bioDomainTools,
 ];

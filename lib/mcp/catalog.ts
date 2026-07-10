@@ -1456,4 +1456,119 @@ export const MCP_TOOLS: readonly McpToolDef[] = [
       }),
     }),
   },
+
+  // === bioDomain.ts (biology domain layer: ontology + finding surface) ========
+  {
+    name: "verify_bioinformatics_finding",
+    description:
+      "Verify a structured bioinformatics finding (e.g. a scRNA-seq / signature claim) against the exact " +
+      "source passage it is drawn from. Provide `assertion` (the claim, e.g. \"CD8 memory/exhausted ratio " +
+      "stratifies ICB responders, AUC 0.86\"), the claimed `markerGenes` + `cellType`, the `effectSize`, the " +
+      "study `population`, and `sourceText` (the verbatim results passage). Runs deterministic rule engines — " +
+      "marker canonicalization vs curated panels, effect-size sanity (AUC in [0.5,1], CI contains the point " +
+      "estimate, direction vs claimed benefit) — and grounds every quoted number to a VERBATIM substring of " +
+      "sourceText; any number it cannot locate is DROPPED and counted. Returns a deterministic verdict " +
+      "(supported | overstated | partially_supported | unsupported | insufficient_evidence), the per-check " +
+      "`signals`, grounded `flagged_spans`, canonicalized markers, and `droppedUngrounded`. No LLM is in the " +
+      "numeric/verdict path.",
+    method: "POST",
+    path: "/api/bio/verify-finding",
+    inputSchema: obj(
+      {
+        assertion: str({ minLength: 1, maxLength: 2000, description: "The finding / claim to verify." }),
+        markerGenes: arr(str({ minLength: 1, maxLength: 50 }), {
+          description: "Claimed marker gene symbols, e.g. [\"IL7R\",\"TCF7\",\"CCR7\"].",
+        }),
+        cellType: str({ minLength: 1, maxLength: 200, description: "Claimed cell type, e.g. CD8 memory-like." }),
+        effectSize: obj(
+          {
+            metric: str({ enum: ["AUC", "HR", "logFC"], description: "Effect-size metric." }),
+            value: num({ description: "Point estimate." }),
+            ci_lower: num({ description: "Optional 95% CI lower bound." }),
+            ci_upper: num({ description: "Optional 95% CI upper bound." }),
+          },
+          ["metric", "value"]
+        ),
+        population: str({ minLength: 1, maxLength: 500, description: "Study population." }),
+        sourceText: str({
+          minLength: 1,
+          maxLength: 200000,
+          description: "The verbatim source passage every quoted number must appear in.",
+        }),
+      },
+      ["assertion", "sourceText"]
+    ),
+  },
+  {
+    name: "check_marker_panel",
+    description:
+      "Check whether one or more genes are documented markers of a cell type against PaperTrail's curated " +
+      "cell_marker_panels (CellMarker 2.0 / PanglaoDB, with direction + tissue + PMID). Provide `markerGenes` " +
+      "(one or more symbols, e.g. [\"IL7R\",\"TCF7\"]) and `cellType` (label, e.g. \"CD8 memory-like\"). Each " +
+      "gene is resolved to a canonical ontology term (deterministic, no LLM) and checked for registered " +
+      "membership + direction; a gene that is not a marker, or is registered in the opposite direction, is " +
+      "flagged as overstated. An unresolved gene or a cell type with no curated panel yields an honest empty " +
+      "result — never a fabricated marker relationship.",
+    method: "POST",
+    path: "/api/bio/marker-check",
+    inputSchema: obj(
+      {
+        markerGenes: arr(str({ minLength: 1, maxLength: 50 }), {
+          description: "Claimed marker gene symbols, e.g. [\"IL7R\",\"TCF7\",\"CCR7\"].",
+        }),
+        cellType: str({ minLength: 1, maxLength: 200, description: "Cell-type label, e.g. CD8 memory-like." }),
+      },
+      ["markerGenes", "cellType"]
+    ),
+  },
+  {
+    name: "canonicalize_entity",
+    description:
+      "Resolve a free-text biomedical surface form to its canonical ontology term. Provide `surface` (the " +
+      "term to resolve, e.g. \"HER2\" or \"heart attack\") and optionally `type` (a term-type filter to " +
+      "disambiguate). The surface is normalized (lowercase, collapsed whitespace) and matched EXACTLY " +
+      "against curated ontology synonyms — a hit returns the CURIE, canonical label, ontology, term type, a " +
+      "score of 1.0, and cross-references (xrefs); a miss returns null. No LLM is in the entity-linking " +
+      "path, and an unrecognized surface yields an honest null rather than a fabricated id. USE THIS to get " +
+      "the exact ontology id + xrefs for an entity, or to normalize a term before querying an evidence " +
+      "engine.",
+    method: "POST",
+    path: "/api/entities/canonicalize",
+    inputSchema: obj(
+      {
+        surface: str({ minLength: 1, maxLength: 200, description: "The surface form to resolve, e.g. HER2." }),
+        type: str({
+          minLength: 1,
+          maxLength: 64,
+          description: "Optional term-type filter to disambiguate the match.",
+        }),
+      },
+      ["surface"]
+    ),
+  },
+  {
+    name: "verify_variant_outcome",
+    description:
+      "Verify a claimed variant→outcome direction against ClinVar's registered clinical significance. " +
+      "Provide at least one variant identifier — `rsId` (e.g. \"rs334\"), `hgvs`, or `gene` — optionally " +
+      "narrowed by `condition`, plus the `claimedDirection` (\"protective\" or \"risk\"). Returns a " +
+      "deterministic verdict on whether the claimed direction is consistent with the registered ClinVar " +
+      "significance, with the supporting records. No LLM is in the verdict path; an empty upstream response " +
+      "yields an honest not_found/insufficient result rather than a guess.",
+    method: "POST",
+    path: "/api/bio/variant-outcome",
+    inputSchema: obj(
+      {
+        rsId: str({ minLength: 1, maxLength: 50, description: "Variant rsID, e.g. rs334." }),
+        hgvs: str({ minLength: 1, maxLength: 200, description: "HGVS variant notation." }),
+        gene: str({ minLength: 1, maxLength: 50, description: "Gene symbol to scope the locus." }),
+        condition: str({ minLength: 1, maxLength: 200, description: "Optional condition/phenotype to scope." }),
+        claimedDirection: str({
+          enum: ["protective", "risk"],
+          description: "Claimed clinical direction: protective (reduces risk) or risk (increases risk).",
+        }),
+      },
+      ["claimedDirection"]
+    ),
+  },
 ];
