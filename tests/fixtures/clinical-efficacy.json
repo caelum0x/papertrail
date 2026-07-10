@@ -1,0 +1,86 @@
+[
+  {
+    "id": "sprint-accurate",
+    "claim": "Intensive blood-pressure control reduced major cardiovascular events by about 25% in high-risk adults without diabetes.",
+    "sourceText": "SPRINT was a randomized trial of intensive versus standard systolic blood-pressure control in adults at high cardiovascular risk but without diabetes. Intensive treatment (target <120 mm Hg) reduced the primary composite cardiovascular outcome, with a hazard ratio of 0.75 (95% CI, 0.64 to 0.89), a relative reduction of about 25%.",
+    "goldLabel": "SUPPORT",
+    "citedDocIds": [1]
+  },
+  {
+    "id": "dapa-hf-accurate",
+    "claim": "In heart failure with reduced ejection fraction, dapagliflozin cut the risk of worsening heart failure or cardiovascular death by roughly a quarter.",
+    "sourceText": "In the DAPA-HF trial of patients with heart failure and a reduced ejection fraction, dapagliflozin reduced the primary composite outcome of worsening heart failure or death from cardiovascular causes, with a hazard ratio of 0.74 (95% CI, 0.65 to 0.85) compared with placebo.",
+    "goldLabel": "SUPPORT",
+    "citedDocIds": [1]
+  },
+  {
+    "id": "paradigm-accurate",
+    "claim": "Sacubitril-valsartan reduced the primary composite endpoint by about 20% compared with enalapril.",
+    "sourceText": "In PARADIGM-HF, sacubitril-valsartan was compared with enalapril in patients with heart failure and a reduced ejection fraction. Sacubitril-valsartan reduced the primary composite of death from cardiovascular causes or hospitalization for heart failure, with a hazard ratio of 0.80 (95% CI, 0.73 to 0.87).",
+    "goldLabel": "SUPPORT",
+    "citedDocIds": [1]
+  },
+  {
+    "id": "jupiter-accurate",
+    "claim": "Rosuvastatin reduced the primary composite cardiovascular endpoint by roughly 44% in apparently healthy adults with elevated CRP.",
+    "sourceText": "In the JUPITER trial, apparently healthy persons with normal LDL cholesterol but elevated high-sensitivity C-reactive protein were randomized to rosuvastatin or placebo. Rosuvastatin reduced the primary composite endpoint of major cardiovascular events, with a hazard ratio of 0.56 (95% CI, 0.46 to 0.69).",
+    "goldLabel": "SUPPORT",
+    "citedDocIds": [1]
+  },
+  {
+    "id": "sprint-overstated",
+    "claim": "Intensive blood-pressure control cut cardiovascular risk in half.",
+    "sourceText": "SPRINT was a randomized trial of intensive versus standard systolic blood-pressure control in adults at high cardiovascular risk but without diabetes. Intensive treatment reduced the primary composite cardiovascular outcome, with a hazard ratio of 0.75 (95% CI, 0.64 to 0.89), a relative reduction of about 25%.",
+    "goldLabel": "CONTRADICT",
+    "citedDocIds": [1]
+  },
+  {
+    "id": "empareg-overstated",
+    "claim": "Empagliflozin halved the risk of major adverse cardiovascular events in patients with type 2 diabetes.",
+    "sourceText": "In the EMPA-REG OUTCOME trial, patients with type 2 diabetes and established cardiovascular disease received empagliflozin or placebo. Empagliflozin reduced the primary three-point major adverse cardiovascular event outcome, with a hazard ratio of 0.86 (95% CI, 0.74 to 0.99).",
+    "goldLabel": "CONTRADICT",
+    "citedDocIds": [1]
+  },
+  {
+    "id": "paradigm-overstated",
+    "claim": "Sacubitril-valsartan reduced cardiovascular death by 60% versus enalapril.",
+    "sourceText": "In PARADIGM-HF, sacubitril-valsartan reduced the primary composite of death from cardiovascular causes or hospitalization for heart failure versus enalapril, with a hazard ratio of 0.80 (95% CI, 0.73 to 0.87). Death from cardiovascular causes was reduced with a hazard ratio of 0.80.",
+    "goldLabel": "CONTRADICT",
+    "citedDocIds": [1]
+  },
+  {
+    "id": "sprint-population",
+    "claim": "Intensive blood-pressure control reduces cardiovascular events in all adults, including those with diabetes.",
+    "sourceText": "SPRINT was a randomized trial of intensive versus standard systolic blood-pressure control in adults at high cardiovascular risk. Patients with diabetes were explicitly excluded from the trial. Intensive treatment reduced the primary composite cardiovascular outcome, with a hazard ratio of 0.75 (95% CI, 0.64 to 0.89).",
+    "goldLabel": "CONTRADICT",
+    "citedDocIds": [1]
+  },
+  {
+    "id": "dapa-hf-population",
+    "claim": "Dapagliflozin reduces heart-failure hospitalization in all patients with heart failure, regardless of ejection fraction.",
+    "sourceText": "In the DAPA-HF trial, which enrolled only patients with heart failure and a reduced ejection fraction, dapagliflozin reduced the primary composite of worsening heart failure or cardiovascular death, with a hazard ratio of 0.74 (95% CI, 0.65 to 0.85). Patients with preserved ejection fraction were not studied.",
+    "goldLabel": "CONTRADICT",
+    "citedDocIds": [1]
+  },
+  {
+    "id": "caveat-secondary-endpoint",
+    "claim": "The therapy significantly improved overall survival.",
+    "sourceText": "In this randomized oncology trial, the primary endpoint of overall survival did not reach statistical significance (hazard ratio 0.92; 95% CI, 0.80 to 1.06; p = 0.24). In a prespecified secondary analysis, progression-free survival favored the treatment arm (hazard ratio 0.78; p = 0.03).",
+    "goldLabel": "CONTRADICT",
+    "citedDocIds": [1]
+  },
+  {
+    "id": "no-support-vitamin-cancer",
+    "claim": "Daily vitamin D supplementation prevents all forms of cancer.",
+    "sourceText": "SPRINT was a randomized trial of intensive versus standard systolic blood-pressure control in adults at high cardiovascular risk but without diabetes. Intensive treatment reduced the primary composite cardiovascular outcome, with a hazard ratio of 0.75 (95% CI, 0.64 to 0.89).",
+    "goldLabel": "NEI",
+    "citedDocIds": [1]
+  },
+  {
+    "id": "no-support-aspirin-alzheimer",
+    "claim": "Daily aspirin eliminates the risk of Alzheimer's disease.",
+    "sourceText": "In the JUPITER trial, apparently healthy persons with elevated high-sensitivity C-reactive protein were randomized to rosuvastatin or placebo. Rosuvastatin reduced the primary composite endpoint of major cardiovascular events, with a hazard ratio of 0.56 (95% CI, 0.46 to 0.69).",
+    "goldLabel": "NEI",
+    "citedDocIds": [1]
+  }
+]

@@ -55,6 +55,7 @@ const NAV_SECTIONS: { title: string; links: { href: string; label: string }[] }[
       { href: "/console/workbench", label: "Evidence Workbench" },
       { href: "/console/evidence-report", label: "Evidence Report" },
       { href: "/console/synthesis", label: "Meta-analysis" },
+      { href: "/console/meta-advanced", label: "Bayesian / Sensitivity" },
       { href: "/console/synthesis-report", label: "Synthesis Report" },
       { href: "/console/extraction", label: "Paper Extraction" },
       { href: "/console/citations", label: "Smart Citations" },

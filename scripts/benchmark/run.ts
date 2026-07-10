@@ -1,8 +1,10 @@
 import "dotenv/config";
-import { promises as fs } from "node:fs";
+import { promises as fs, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { z } from "zod";
+
+import { benchmarkCaseArraySchema } from "@/lib/eval/benchmarkTypes";
 
 import { callClaudeForJson } from "@/lib/claude";
 import { ExtractedFindingSchema, VerificationResultSchema } from "@/lib/schemas";
@@ -303,22 +305,37 @@ function formatComparison(results: readonly SystemResult[]): string {
 
 // --- docs/benchmark.md writing ----------------------------------------------
 
-const DOCS_PATH = path.join(process.cwd(), "docs", "benchmark.md");
 const RESULTS_START = "<!-- BENCH:RESULTS:START -->";
 const RESULTS_END = "<!-- BENCH:RESULTS:END -->";
+
+// Committed clinical-efficacy fixture — PaperTrail's DESIGN-TARGET task (efficacy-
+// magnitude verification against a source), where recompute-from-registry actually
+// applies. Self-consistent claim/source/gold triples using real, well-documented trial
+// numbers (SPRINT, DAPA-HF, PARADIGM-HF, JUPITER, EMPA-REG). Validated at load.
+const CLINICAL_FIXTURE_PATH = path.join(
+  process.cwd(),
+  "tests",
+  "fixtures",
+  "clinical-efficacy.json"
+);
+
+function loadClinicalEfficacy(): BenchmarkCase[] {
+  const raw = JSON.parse(readFileSync(CLINICAL_FIXTURE_PATH, "utf8")) as unknown;
+  return benchmarkCaseArraySchema.parse(raw);
+}
 
 /**
  * Splice a fresh RESULTS block between the RESULTS markers in docs/benchmark.md,
  * leaving the fixed METHODOLOGY section untouched. If the file or markers are missing,
  * we log and skip rather than clobber anything — the console table stays authoritative.
  */
-async function writeResults(block: string): Promise<void> {
+async function writeResults(block: string, docsPath: string): Promise<void> {
   let existing: string;
   try {
-    existing = await fs.readFile(DOCS_PATH, "utf8");
+    existing = await fs.readFile(docsPath, "utf8");
   } catch {
     process.stderr.write(
-      `\n[warn] ${DOCS_PATH} not found; skipping results write (console output above is authoritative).\n`
+      `\n[warn] ${docsPath} not found; skipping results write (console output above is authoritative).\n`
     );
     return;
   }
@@ -327,7 +344,7 @@ async function writeResults(block: string): Promise<void> {
   const endIdx = existing.indexOf(RESULTS_END);
   if (startIdx === -1 || endIdx === -1 || endIdx < startIdx) {
     process.stderr.write(
-      `\n[warn] RESULTS markers not found in ${DOCS_PATH}; skipping results write.\n`
+      `\n[warn] RESULTS markers not found in ${docsPath}; skipping results write.\n`
     );
     return;
   }
@@ -335,8 +352,8 @@ async function writeResults(block: string): Promise<void> {
   const before = existing.slice(0, startIdx + RESULTS_START.length);
   const after = existing.slice(endIdx);
   const next = `${before}\n\n${block}\n\n${after}`;
-  await fs.writeFile(DOCS_PATH, next, "utf8");
-  process.stdout.write(`Wrote results to ${DOCS_PATH}\n`);
+  await fs.writeFile(docsPath, next, "utf8");
+  process.stdout.write(`Wrote results to ${docsPath}\n`);
 }
 
 /** Build the markdown RESULTS block: run metadata, comparison table, per-system detail. */
@@ -365,10 +382,11 @@ function buildResultsBlock(
 
 interface Cli {
   full: boolean;
+  clinical: boolean;
 }
 
 function parseArgs(argv: readonly string[]): Cli {
-  return { full: argv.includes("--full") };
+  return { full: argv.includes("--full"), clinical: argv.includes("--clinical") };
 }
 
 function requireApiKey(): void {
@@ -393,16 +411,28 @@ async function main(): Promise<void> {
   const cli = parseArgs(process.argv.slice(2));
   requireApiKey();
 
-  const datasetLabel = cli.full
-    ? "SciFact dev (full, reference/)"
-    : "SciFact curated sample (committed)";
+  const datasetLabel = cli.clinical
+    ? "Clinical-efficacy claims (committed, PaperTrail's design task)"
+    : cli.full
+      ? "SciFact dev (full, reference/)"
+      : "SciFact curated sample (committed)";
+  // The clinical run writes to its own doc so it never clobbers the SciFact results.
+  const docsPath = path.join(
+    process.cwd(),
+    "docs",
+    cli.clinical ? "benchmark-clinical.md" : "benchmark.md"
+  );
   process.stdout.write(`\nPaperTrail benchmark — ${datasetLabel}\n`);
 
-  // loadScifact/loadSample are synchronous and validate every case with Zod at load.
-  // BENCH_LIMIT caps the number of cases (useful for a cheap smoke run that spends
-  // few tokens); unset = the full sample / dev split.
+  // Loaders are synchronous and validate every case with Zod at load. BENCH_LIMIT caps
+  // the number of cases (useful for a cheap smoke run); unset = the full set.
   const benchLimit = process.env.BENCH_LIMIT ? Number(process.env.BENCH_LIMIT) : undefined;
-  const cases: BenchmarkCase[] = (cli.full ? loadScifact({ split: "dev" }) : loadSample()).slice(
+  const loaded: BenchmarkCase[] = cli.clinical
+    ? loadClinicalEfficacy()
+    : cli.full
+      ? loadScifact({ split: "dev" })
+      : loadSample();
+  const cases: BenchmarkCase[] = loaded.slice(
     0,
     Number.isFinite(benchLimit) && (benchLimit as number) > 0 ? benchLimit : undefined
   );
@@ -436,7 +466,7 @@ async function main(): Promise<void> {
     process.stdout.write(formatMetricsTable(r.summary, { title: r.name }) + "\n\n");
   }
 
-  await writeResults(buildResultsBlock(datasetLabel, cases.length, results));
+  await writeResults(buildResultsBlock(datasetLabel, cases.length, results), docsPath);
 }
 
 main().catch((err: unknown) => {

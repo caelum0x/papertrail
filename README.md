@@ -100,10 +100,14 @@ Three things are true about that result:
    Claude-alone errored on **16/60** (raw Claude often returned prose instead of valid JSON —
    PaperTrail's Zod-validated pipeline did not).
 
-**Conclusion:** SciFact is the wrong yardstick for PaperTrail, and we do **not** cite 58.3% as a
-headline capability number — it's the conservative floor on a mismatched task. A fair benchmark
-uses **clinical-efficacy claims** (`tests/fixtures/test-claims.json`) where recompute-from-registry
-actually applies. Full methodology + confusion matrices in [`docs/benchmark.md`](docs/benchmark.md).
+**On the design task, it works.** The **fair** benchmark — clinical-efficacy claims verified against
+a source that reports the registered effect size (`npm run bench -- --clinical`,
+[`docs/benchmark-clinical.md`](docs/benchmark-clinical.md)) — scores PaperTrail **100%**. Honest
+caveat: on that small, fairly clear-cut set **Claude-alone also scores 100%**, so it shows
+_fitness for task_, not a _margin_ over the LLM (the margin needs subtler magnitude-drift cases —
+future work). SciFact remains the wrong yardstick; we do not cite 58.3% as a capability number.
+Full methodology + confusion matrices in [`docs/benchmark.md`](docs/benchmark.md) and
+[`docs/benchmark-clinical.md`](docs/benchmark-clinical.md).
 
 ## Capabilities
 
