@@ -39,6 +39,11 @@ export async function POST(req: NextRequest): Promise<Response> {
       return fail("Invalid email or password.", 401);
     }
     const user = rows[0];
+    // Google-only accounts have no password_hash — steer them to Google sign-in
+    // instead of calling bcrypt with a null hash.
+    if (!user.password_hash) {
+      return fail("This account uses Google sign-in. Use “Continue with Google”.", 401);
+    }
     const valid = await verifyPassword(parsed.data.password, user.password_hash);
     if (!valid) {
       return fail("Invalid email or password.", 401);

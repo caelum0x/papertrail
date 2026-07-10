@@ -13,6 +13,7 @@ const LINKS: Array<{ href: string; label: string }> = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/eval", label: "Accuracy" },
   { href: "/api-docs", label: "API" },
+  { href: "/connect", label: "Claude Science" },
   { href: "/about", label: "About" },
 ];
 

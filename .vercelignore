@@ -4,3 +4,6 @@ python/
 reference/
 .claude/
 *.log
+# MCP connector package + Claude Science skills — shipped to GitHub, not to the web app
+mcp/
+skills/

@@ -71,7 +71,7 @@ export default function Home() {
         </div>
       )}
 
-      <div className="max-w-2xl">
+      <div className="mx-auto max-w-3xl">
         <ClaimInput onSubmit={handleSubmit} loading={loading} />
 
         <SourceHintInput value={sourceHint} onChange={setSourceHint} disabled={loading} />
@@ -86,7 +86,7 @@ export default function Home() {
       </div>
 
       {loading && (
-        <div className="mt-6 max-w-2xl">
+        <div className="mt-6 mx-auto max-w-3xl">
           <VerifyStepper />
         </div>
       )}

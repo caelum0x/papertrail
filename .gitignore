@@ -3,6 +3,11 @@
 /.pnp
 .pnp.js
 
+# MCP connector package build artifacts (source is committed, build output is not)
+mcp/node_modules/
+mcp/dist/
+mcp/*.tsbuildinfo
+
 # next.js
 /.next/
 /out/

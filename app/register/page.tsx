@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { GoogleSignInButton, oauthErrorMessage } from "../_components/GoogleSignInButton";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -12,6 +13,12 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get("error");
+    const message = oauthErrorMessage(code);
+    if (message) setError(message);
+  }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -44,7 +51,15 @@ export default function RegisterPage() {
         <p className="mt-1 text-sm text-ink/40">
           Sets up your account and organization.
         </p>
-        <form onSubmit={onSubmit} className="mt-6 space-y-4">
+        <div className="mt-6">
+          <GoogleSignInButton label="Sign up with Google" />
+        </div>
+        <div className="my-5 flex items-center gap-3">
+          <span className="h-px flex-1 bg-ink/10" />
+          <span className="text-xs text-ink/40">or with email</span>
+          <span className="h-px flex-1 bg-ink/10" />
+        </div>
+        <form onSubmit={onSubmit} className="space-y-4">
           <div>
             <label className="block text-sm text-ink/70 mb-1" htmlFor="name">
               Your name
