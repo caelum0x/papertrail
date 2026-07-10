@@ -1,7 +1,6 @@
 import Link from "next/link";
 
-// GitHub link is a placeholder — replace href="#" with the real repo URL once public.
-const GITHUB_URL = "#";
+const GITHUB_URL = "https://github.com/caelum0x/papertrail";
 
 export function Footer() {
   return (
@@ -9,12 +8,15 @@ export function Footer() {
       <div className="mx-auto flex max-w-5xl flex-col gap-3 px-4 py-8 text-sm text-ink/60">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <span>
-            PaperTrail — open-source (MIT), built for Built with Claude: Life
-            Sciences
+            PaperTrail — open-source (Apache-2.0), built for Built with Claude:
+            Life Sciences
           </span>
           <nav className="flex items-center gap-4">
             <Link href="/about" className="hover:text-ink">
               About
+            </Link>
+            <Link href="/connect" className="hover:text-ink">
+              Claude Science
             </Link>
             <Link href="/api-docs" className="hover:text-ink">
               API
