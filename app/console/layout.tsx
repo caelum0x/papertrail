@@ -61,6 +61,7 @@ const NAV_SECTIONS: { title: string; links: { href: string; label: string }[] }[
       { href: "/console/graph", label: "Knowledge Graph" },
       { href: "/console/hypotheses", label: "Research Gaps" },
       { href: "/console/contradiction", label: "Contradiction Atlas" },
+      { href: "/console/mechanism-context", label: "Mechanism Context" },
     ],
   },
   {
@@ -90,6 +91,7 @@ const NAV_SECTIONS: { title: string; links: { href: string; label: string }[] }[
     title: "Report & analyze",
     links: [
       { href: "/console/reports", label: "Reports" },
+      { href: "/console/submission", label: "Submission Bundle" },
       { href: "/console/analytics", label: "Analytics" },
       { href: "/console/analytics/evidence-reports", label: "Evidence Analytics" },
       { href: "/console/evaluation", label: "Evaluation" },
