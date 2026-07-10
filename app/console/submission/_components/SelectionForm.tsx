@@ -30,12 +30,48 @@ interface SelectionFormProps {
   assembling: boolean;
 }
 
+interface RecentVerification {
+  id: string;
+  claim_text?: string;
+  discrepancy_type?: string | null;
+  trust_score?: number | null;
+}
+
 export function SelectionForm({ onAssemble, assembling }: SelectionFormProps) {
   const [reports, setReports] = useState<EvidenceReportListItem[]>([]);
   const [reportsLoading, setReportsLoading] = useState(true);
   const [reportsError, setReportsError] = useState<string | null>(null);
   const [selectedReport, setSelectedReport] = useState<string>("");
   const [verificationRaw, setVerificationRaw] = useState("");
+  const [recent, setRecent] = useState<RecentVerification[]>([]);
+
+  // Recent verifications are a global (non-org) resource — surface them as a click-to-add
+  // picker so a user does not have to know raw UUIDs.
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/verifications?limit=15");
+        const body = (await res.json().catch(() => null)) as
+          | { items?: RecentVerification[] }
+          | null;
+        if (active && body?.items) setRecent(body.items);
+      } catch {
+        /* non-fatal: the paste field still works */
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const addVerification = useCallback((id: string) => {
+    setVerificationRaw((prev) => {
+      const existing = parseIds(prev);
+      if (existing.includes(id)) return prev;
+      return existing.length > 0 ? `${prev.trim()}\n${id}` : id;
+    });
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -123,6 +159,27 @@ export function SelectionForm({ onAssemble, assembling }: SelectionFormProps) {
           Contributes the pooled estimate, GRADE certainty, and synthesis verdict.
         </p>
       </div>
+
+      {/* Recent verifications — click to add */}
+      {recent.length > 0 ? (
+        <div className="mt-4">
+          <span className="block text-sm font-medium text-ink/70">Recent verifications</span>
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            {recent.map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                onClick={() => addVerification(v.id)}
+                title={v.claim_text ?? v.id}
+                className="max-w-[16rem] truncate rounded-md border border-ink/15 px-2 py-1 text-xs text-ink/70 hover:border-accent hover:text-accent"
+              >
+                + {v.claim_text ? (v.claim_text.length > 40 ? `${v.claim_text.slice(0, 40)}…` : v.claim_text) : v.id.slice(0, 8)}
+                {v.discrepancy_type ? ` (${v.discrepancy_type.replace(/_/g, " ")})` : ""}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {/* Verification ids */}
       <div className="mt-4">
