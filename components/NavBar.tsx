@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 
 const LINKS: Array<{ href: string; label: string }> = [
@@ -25,7 +26,8 @@ export function NavBar() {
   return (
     <nav className="sticky top-0 z-10 border-b border-ink/10 bg-white/80 backdrop-blur">
       <div className="mx-auto flex max-w-5xl items-center gap-1 px-4 py-3 overflow-x-auto">
-        <Link href="/" className="mr-3 shrink-0 font-semibold text-ink">
+        <Link href="/" className="mr-3 shrink-0 flex items-center gap-2 font-semibold text-ink">
+          <Image src="/logo.png" alt="PaperTrail" width={30} height={20} priority className="h-6 w-auto" />
           PaperTrail
         </Link>
         <div className="flex items-center gap-1">

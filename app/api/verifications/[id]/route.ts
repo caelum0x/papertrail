@@ -18,9 +18,10 @@ const idSchema = z.string().uuid();
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
-  const parsed = idSchema.safeParse(params.id);
+  const { id: verificationId } = await params;
+  const parsed = idSchema.safeParse(verificationId);
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid verification id." }, { status: 400 });
   }

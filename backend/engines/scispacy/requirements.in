@@ -1,0 +1,32 @@
+numpy
+# NOTE: scipy<1.11 is required when creating the linkers, so that's currently
+# only supported on Python<3.11
+# https://github.com/allenai/scispacy/issues/519#issuecomment-2229915999
+scipy
+spacy>=3.7.0,<3.8.0
+spacy-lookups-data
+pandas
+requests>=2.0.0,<3.0.0
+conllu
+
+# Candidate generation and entity linking
+joblib
+nmslib>=2.1.2
+scikit-learn>=0.20.3
+
+# Required for testing.
+pytest
+pytest-cov
+flake8
+# black currently pinned because of a dependency issue with spacy, typer, and click
+black
+mypy
+types-requests
+types-setuptools
+types-tabulate
+
+# Required for releases.
+twine
+
+# required for the tests to run, or to use the custom sentence splitter
+pysbd

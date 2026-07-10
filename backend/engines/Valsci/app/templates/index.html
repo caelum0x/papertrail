@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% block content %}
+    {% if migration_status.pending_count %}
+    <section class="status-card warning-card" id="migrationStrip">
+        <strong>Legacy migration needs attention.</strong>
+        <span>{{ migration_status.pending_count }} legacy batch folder(s) are still outside the canonical claim store.</span>
+        <div class="inline-actions">
+            <a href="{{ url_for('api.migration_page') }}" class="primary-button small-button">Review Migration</a>
+            <button type="button" class="secondary-button small-button" id="migrateAllBtn">Migrate &amp; Archive</button>
+        </div>
+    </section>
+    {% endif %}
+
+    <section class="dashboard-grid">
+        <article class="panel">
+            <div class="panel-header">
+                <div>
+                    <h2 class="panel-title">Run Claims</h2>
+                    <p class="panel-subtitle">Submit claims for evaluation.</p>
+                </div>
+                <a href="{{ url_for('api.guidebook_page') }}#home" class="help-link" title="Guidebook: Home Page">?</a>
+            </div>
+
+            <div id="homeRunStatus" class="status-card info-card hidden"></div>
+
+            <div class="form-grid">
+                <div class="grid-two">
+                    <div class="form-row">
+                        <label for="providerId">Provider</label>
+                        <select id="providerId"></select>
+                    </div>
+                    <div class="form-row">
+                        <label for="modelDefault">Model</label>
+                        <select id="modelDefault"></select>
+                    </div>
+                </div>
+
+                <div class="grid-two">
+                    <div class="form-row">
+                        <label for="duplicateStrategy">Existing Claim Handling</label>
+                        <select id="duplicateStrategy">
+                            <option value="rerun">Create New Run</option>
+                            <option value="view">Open Existing Claim</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="batchTags">Batch Tags</label>
+                        <input type="text" id="batchTags" placeholder="Optional comma-separated tags">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <label for="claimText">Claims</label>
+                    <textarea id="claimText" placeholder="Enter one claim per line"></textarea>
+                </div>
+
+                <div class="grid-two">
+                    <div class="form-row">
+                        <label for="claimFile">Upload Claims</label>
+                        <input type="file" id="claimFile" accept=".txt">
+                    </div>
+                </div>
+
+                <div class="inline-actions">
+                    <button type="button" class="secondary-button" id="stageClaimsBtn">Stage Claims</button>
+                    <button type="button" class="ghost-button" id="clearClaimsBtn">Clear</button>
+                </div>
+            </div>
+
+            <div class="panel-divider"></div>
+
+            <div class="stack">
+                <strong>Staged Claims</strong>
+                <div id="stagedClaims" class="staged-list"></div>
+            </div>
+
+            <div class="panel-divider"></div>
+
+            <details class="panel panel-muted">
+                <summary><strong>Advanced Run Settings</strong></summary>
+                <div class="panel-divider"></div>
+                <div class="grid-three">
+                    <div class="form-row">
+                        <label for="numQueries">Queries</label>
+                        <input type="number" id="numQueries" value="5" min="1" max="20">
+                    </div>
+                    <div class="form-row">
+                        <label for="resultsPerQuery">Results / Query</label>
+                        <input type="number" id="resultsPerQuery" value="5" min="1" max="10">
+                    </div>
+                    <label class="checkbox-row">
+                        <input type="checkbox" id="useBibliometrics" checked>
+                        <span>Use bibliometric scoring</span>
+                    </label>
+                </div>
+            </details>
+
+            <div class="panel-divider"></div>
+
+            <div id="preflightPanel" class="panel panel-muted hidden"></div>
+
+            <div class="inline-actions">
+                <button type="button" class="primary-button" id="queueRunBtn">Review &amp; Queue Run</button>
+            </div>
+        </article>
+
+        <div class="section-stack">
+            <article class="panel">
+                <div class="panel-header">
+                    <div>
+                        <h2 class="panel-title">Data</h2>
+                        <p class="panel-subtitle">Current Semantic Scholar release and index readiness.</p>
+                    </div>
+                    <a href="{{ url_for('api.data_page') }}" class="secondary-button small-button">Open Data</a>
+                </div>
+                <div id="homeDataStatus" class="status-card info-card hidden"></div>
+                <div class="summary-strip" id="homeDataSummary">
+                    <div class="summary-cell">
+                        <span class="label">Release</span>
+                        <span class="value">Checking...</span>
+                    </div>
+                    <div class="summary-cell">
+                        <span class="label">Data</span>
+                        <span class="value">Checking...</span>
+                    </div>
+                    <div class="summary-cell">
+                        <span class="label">Index</span>
+                        <span class="value">Checking...</span>
+                    </div>
+                </div>
+            </article>
+
+            <article class="panel">
+                <div class="inline-actions">
+                    <a href="{{ url_for('api.arena_submit') }}" class="primary-button">New Arena</a>
+                    <a href="{{ url_for('api.arenas_page') }}" class="secondary-button">View Arenas</a>
+                </div>
+            </article>
+
+            <article class="panel">
+                <div class="panel-header">
+                    <div>
+                        <h2 class="panel-title">Recent Arenas</h2>
+                        <p class="panel-subtitle">Recent comparisons.</p>
+                    </div>
+                    <a href="{{ url_for('api.arenas_page') }}" class="secondary-button small-button">Open Library</a>
+                </div>
+                <div id="recentArenas" class="arena-list"></div>
+            </article>
+
+            <article class="panel">
+                <div class="panel-header">
+                    <div>
+                        <h2 class="panel-title">Recent Claims</h2>
+                        <p class="panel-subtitle">Recent evaluations.</p>
+                    </div>
+                    <a href="{{ url_for('api.browser') }}" class="secondary-button small-button">Open Claims</a>
+                </div>
+                <div id="recentClaims" class="record-list"></div>
+            </article>
+        </div>
+    </section>
+
+    <div id="costModal" class="modal hidden">
+        <div class="modal-card">
+            <div class="panel-header">
+                <div>
+                    <h2 class="panel-title">Confirm Claim Run</h2>
+                    <p class="panel-subtitle">Review the estimated cost before queueing the run.</p>
+                </div>
+            </div>
+            <div id="costModalBody" class="stack"></div>
+            <label class="checkbox-row">
+                <input type="checkbox" id="confirmCostCheckbox">
+                <span>I approve this estimated spend and want to queue the run.</span>
+            </label>
+            <div class="inline-actions">
+                <button type="button" class="secondary-button" id="cancelCostBtn">Cancel</button>
+                <button type="button" class="primary-button" id="confirmCostBtn" disabled>Queue Run</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        window.homePageConfig = {
+            providers: {{ providers|tojson }},
+        };
+    </script>
+{% endblock %}
+
+{% block scripts %}
+    <script src="{{ url_for('static', filename='home.js') }}"></script>
+{% endblock %}

@@ -29,3 +29,10 @@ tsconfig.tsbuildinfo
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+
+# Owned polyglot backend (backend/) is tracked; ignore its build/venv/model artifacts only
+backend/**/.venv/
+backend/**/__pycache__/
+backend/**/*.egg-info/
+backend/**/node_modules/

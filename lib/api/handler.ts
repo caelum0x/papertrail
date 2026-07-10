@@ -18,7 +18,10 @@ export interface Pagination {
   page: number;
 }
 
-type RouteParams = { params?: Record<string, string> };
+// Next 15+ delivers dynamic-route params as a Promise. The wrapper awaits it and
+// hands inner handlers the RESOLVED params, so route handlers stay unchanged.
+type RouteContext = { params?: Promise<Record<string, string>> };
+type ResolvedParams = Record<string, string> | undefined;
 
 function isRbacError(err: unknown): err is RbacError {
   return (
@@ -88,9 +91,9 @@ async function resolveOrg(
 // Wraps an org-scoped route handler. Resolves session -> user -> current org
 // membership. 401 if no valid session, 403 if the user has no access to the org.
 export function withOrg(
-  fn: (req: NextRequest, ctx: Ctx, params: RouteParams["params"]) => Promise<Response>
-): (req: NextRequest, ctx: RouteParams) => Promise<Response> {
-  return async (req: NextRequest, routeCtx: RouteParams) => {
+  fn: (req: NextRequest, ctx: Ctx, params: ResolvedParams) => Promise<Response>
+): (req: NextRequest, ctx: RouteContext) => Promise<Response> {
+  return async (req: NextRequest, routeCtx: RouteContext) => {
     try {
       const userId = await getSessionUserId();
       if (!userId) {
@@ -106,7 +109,8 @@ export function withOrg(
         return fail("No access to this organization.", 403);
       }
       const ctx: Ctx = { user, org: resolved.org, role: resolved.role };
-      return await fn(req, ctx, routeCtx.params);
+      const params = routeCtx.params ? await routeCtx.params : undefined;
+      return await fn(req, ctx, params);
     } catch (err: unknown) {
       if (isRbacError(err)) {
         return fail(err.message, err.status);
@@ -121,10 +125,10 @@ export function withAuth(
   fn: (
     req: NextRequest,
     user: Ctx["user"],
-    params: RouteParams["params"]
+    params: ResolvedParams
   ) => Promise<Response>
-): (req: NextRequest, ctx: RouteParams) => Promise<Response> {
-  return async (req: NextRequest, routeCtx: RouteParams) => {
+): (req: NextRequest, ctx: RouteContext) => Promise<Response> {
+  return async (req: NextRequest, routeCtx: RouteContext) => {
     try {
       const userId = await getSessionUserId();
       if (!userId) {
@@ -134,7 +138,8 @@ export function withAuth(
       if (!user) {
         return fail("Not authenticated.", 401);
       }
-      return await fn(req, user, routeCtx.params);
+      const params = routeCtx.params ? await routeCtx.params : undefined;
+      return await fn(req, user, params);
     } catch (err: unknown) {
       if (isRbacError(err)) {
         return fail(err.message, err.status);

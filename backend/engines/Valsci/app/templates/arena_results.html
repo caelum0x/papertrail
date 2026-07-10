@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <section class="panel">
+        <div class="panel-header">
+            <h2 class="panel-title" id="arenaTitle">Loading arena...</h2>
+            <a href="{{ url_for('api.guidebook_page') }}#arena-workspace" class="help-link" title="Guidebook: Arena Workspace">?</a>
+        </div>
+        <div class="summary-strip" id="arenaSummaryStrip" style="margin-top:14px"></div>
+        <div class="workspace-toolbar">
+            <div class="inline-actions">
+                <span class="badge neutral-badge" id="workspaceRefreshState">Loading</span>
+                <span class="helper-text" id="workspaceLastUpdated">Syncing workspace...</span>
+            </div>
+            <div class="inline-actions">
+                <button type="button" class="secondary-button small-button" id="exportCsvBtn" title="Download the full model comparison as CSV">Export CSV</button>
+                <button type="button" class="secondary-button small-button" id="exportJsonBtn" title="Download the full model comparison as JSON">Export JSON</button>
+                <button type="button" class="secondary-button small-button" id="refreshWorkspaceBtn">Refresh Now</button>
+            </div>
+        </div>
+    </section>
+
+    <section class="panel">
+        <div id="arenaStepper" class="stepper"></div>
+    </section>
+
+    <section class="panel">
+        <div class="workspace-tabs" role="tablist" aria-label="Arena workspace sections">
+            <button type="button" class="workspace-tab active" data-workspace-tab="overview" role="tab" aria-selected="true" aria-controls="overviewPane" id="overviewTab">Overview</button>
+            <button type="button" class="workspace-tab" data-workspace-tab="claims" role="tab" aria-selected="false" aria-controls="claimsPane" id="claimsTab" tabindex="-1">Claims</button>
+            <button type="button" class="workspace-tab" data-workspace-tab="history" role="tab" aria-selected="false" aria-controls="historyPane" id="historyTab" tabindex="-1">History</button>
+        </div>
+
+        <div id="workspaceStatus" class="status-card info-card hidden"></div>
+
+        <div id="overviewPane" class="workspace-pane" role="tabpanel" aria-labelledby="overviewTab">
+            <div id="overviewContent" class="section-stack"></div>
+        </div>
+
+        <div id="claimsPane" class="workspace-pane hidden" role="tabpanel" aria-labelledby="claimsTab" hidden>
+            <div class="claims-toolbar">
+                <label class="field-label" for="matrixSortSelect">
+                    Sort claims
+                    <select id="matrixSortSelect">
+                        <option value="default">Original order</option>
+                        <option value="disagreement">Most disagreement</option>
+                        <option value="rating">Lowest average verdict</option>
+                    </select>
+                </label>
+                <div class="inline-actions">
+                    <button type="button" class="secondary-button small-button" id="expandAllCompareBtn">Expand All Outputs</button>
+                    <button type="button" class="secondary-button small-button" id="collapseAllCompareBtn">Collapse All</button>
+                </div>
+            </div>
+            <div id="verdictMatrix"></div>
+            <div id="claimGroups" class="section-stack" style="margin-top:18px"></div>
+        </div>
+
+        <div id="historyPane" class="workspace-pane hidden" role="tabpanel" aria-labelledby="historyTab" hidden>
+            <div id="historyContent" class="history-list"></div>
+        </div>
+    </section>
+
+    <section class="panel" id="continuePanel">
+        <div class="panel-header">
+            <div>
+                <h2 class="panel-title">Continue Arena</h2>
+                <p class="panel-subtitle">Advance selected claims to the next stage.</p>
+            </div>
+        </div>
+        <div id="continueSummary" class="stack"></div>
+        <div class="inline-actions">
+            <button type="button" class="secondary-button" id="estimateContinueBtn">Estimate Next Stage</button>
+            <button type="button" class="primary-button" id="continueArenaBtn" disabled>Continue Arena</button>
+        </div>
+    </section>
+
+    <div id="continueModal" class="modal hidden">
+        <div class="modal-card">
+            <div class="panel-header">
+                <div>
+                    <h2 class="panel-title">Confirm Arena Continuation</h2>
+                    <p class="panel-subtitle">Review the claims advancing and the cost delta for the next stage.</p>
+                </div>
+            </div>
+            <div id="continueModalBody" class="stack"></div>
+            <div id="continueModalStatus" class="status-card error-card hidden"></div>
+            <label class="checkbox-row">
+                <input type="checkbox" id="confirmContinueCheckbox">
+                <span>I approve this continuation cost and want to advance the selected claims.</span>
+            </label>
+            <div class="inline-actions">
+                <button type="button" class="secondary-button" id="cancelContinueBtn">Cancel</button>
+                <button type="button" class="primary-button" id="confirmContinueBtn" disabled>Continue Arena</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        window.arenaWorkspaceConfig = {
+            arenaId: {{ arena_id|tojson }},
+            focusRunId: {{ focus_run_id|tojson }},
+        };
+    </script>
+{% endblock %}
+
+{% block scripts %}
+    <script src="{{ url_for('static', filename='arena_workspace.js') }}"></script>
+{% endblock %}

@@ -20,7 +20,8 @@ export async function createSession(userId: string): Promise<void> {
     .setExpirationTime("7d")
     .sign(getSecret());
 
-  cookies().set(COOKIE_NAME, token, {
+  const store = await cookies();
+  store.set(COOKIE_NAME, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -30,7 +31,8 @@ export async function createSession(userId: string): Promise<void> {
 }
 
 export async function getSessionUserId(): Promise<string | null> {
-  const token = cookies().get(COOKIE_NAME)?.value;
+  const store = await cookies();
+  const token = store.get(COOKIE_NAME)?.value;
   if (!token) {
     return null;
   }
@@ -43,5 +45,6 @@ export async function getSessionUserId(): Promise<string | null> {
 }
 
 export async function destroySession(): Promise<void> {
-  cookies().delete(COOKIE_NAME);
+  const store = await cookies();
+  store.delete(COOKIE_NAME);
 }

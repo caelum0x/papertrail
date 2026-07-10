@@ -6,6 +6,18 @@ on:
   pull_request:
     branches: [main]
 
+# Dummy values so `next build` can statically evaluate modules that read env at
+# import time. The app's data fetches tolerate a missing/unreachable DB at build
+# (health + source queries fail closed), so no real database is needed in CI —
+# these placeholders only satisfy presence checks and never connect anywhere.
+env:
+  DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?sslmode=disable
+  AUTH_SECRET: ci-placeholder-auth-secret-not-used-for-real-auth
+  CRON_SECRET: ci-placeholder-cron-secret
+  ANTHROPIC_API_KEY: sk-ant-ci-placeholder
+  VOYAGE_API_KEY: pa-ci-placeholder
+  NEXT_TELEMETRY_DISABLED: "1"
+
 jobs:
   build-and-test:
     name: Build and test
@@ -26,8 +38,8 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
-      - name: Run tests
-        run: npx vitest run
+      - name: Test
+        run: npm test
 
       - name: Build
-        run: npx next build
+        run: npm run build

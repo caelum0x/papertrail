@@ -4,8 +4,9 @@ import { useState } from "react";
 import { ClaimInput } from "@/components/ClaimInput";
 import { VerificationView } from "@/components/VerificationView";
 import { VerifyStepper } from "@/components/VerifyStepper";
-import { Hero } from "@/components/Hero";
 import { PipelineDiagram } from "@/components/PipelineDiagram";
+import { MarketingHero } from "./_components/MarketingHero";
+import { FeatureGrid } from "./_components/FeatureGrid";
 import { LocalHistory } from "@/components/LocalHistory";
 import { addLocalHistory } from "@/lib/localHistory";
 import { fetchVerify, type VerifyResponse } from "./_components/verifyClient";
@@ -66,7 +67,7 @@ export default function Home() {
     <main className="mx-auto max-w-5xl px-4 py-12">
       {!result && !loading && (
         <div className="mb-8">
-          <Hero />
+          <MarketingHero />
         </div>
       )}
 
@@ -91,9 +92,12 @@ export default function Home() {
       )}
 
       {!result && !loading && (
-        <div className="mt-10">
-          <PipelineDiagram />
-        </div>
+        <>
+          <div className="mt-10">
+            <PipelineDiagram />
+          </div>
+          <FeatureGrid />
+        </>
       )}
 
       {error && <HomeError message={error} />}

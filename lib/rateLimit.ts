@@ -5,9 +5,20 @@
 
 const buckets = new Map<string, { count: number; resetAt: number }>();
 
-export function checkRateLimit(key: string): { allowed: boolean; remaining: number; resetAt: number } {
-  const max = Number(process.env.RATE_LIMIT_MAX || 10);
-  const windowMs = Number(process.env.RATE_LIMIT_WINDOW_MS || 10 * 60 * 1000);
+// Per-call limit overrides let auth endpoints (login/register) enforce their own
+// stricter throttles without changing the global verify-route defaults. When an
+// override is omitted the env-configured defaults apply, preserving prior behavior.
+export interface RateLimitOptions {
+  max?: number;
+  windowMs?: number;
+}
+
+export function checkRateLimit(
+  key: string,
+  options?: RateLimitOptions
+): { allowed: boolean; remaining: number; resetAt: number } {
+  const max = options?.max ?? Number(process.env.RATE_LIMIT_MAX || 10);
+  const windowMs = options?.windowMs ?? Number(process.env.RATE_LIMIT_WINDOW_MS || 10 * 60 * 1000);
   const now = Date.now();
 
   const existing = buckets.get(key);

@@ -1,12 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { listVerifications } from "@/lib/queries/verifications";
 import { parsePagination } from "@/lib/queries/pagination";
+import { checkRateLimit } from "@/lib/rateLimit";
 import { logEvent } from "@/lib/logger";
 
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
   const start = Date.now();
+
+  const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+  const rate = checkRateLimit(`verifications:${ip}`);
+  if (!rate.allowed) {
+    logEvent("verifications.rate_limited", { ip });
+    return NextResponse.json(
+      { error: "Rate limit reached. Please try again shortly." },
+      { status: 429 }
+    );
+  }
 
   try {
     const { searchParams } = new URL(req.url);

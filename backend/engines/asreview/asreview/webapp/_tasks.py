@@ -1,0 +1,125 @@
+# Copyright 2019-2025 The ASReview Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import sqlite3
+
+import asreview as asr
+from asreview.models.queriers import TopDown
+from asreview.models.stoppers import IsFittable
+from asreview.simulation.simulate import Simulate
+from asreview.webapp.utils import get_project_path
+
+
+def _read_cycle_data(project):
+    return asr.ActiveLearningCycleData(**project.get_model_config())
+
+
+def run_task(project_id, simulation=False):
+    project_path = get_project_path(project_id)
+
+    with asr.Project(project_path, project_id=project_id) as project:
+        if simulation:
+            run_simulation(project)
+        else:
+            run_model(project)
+
+    return True
+
+
+def run_model(project):
+    with project.db as db:
+        if not db.exist_new_labeled_records:
+            return
+
+        labeled = db.get_results_table(columns=["record_id", "label"])
+        # Only train a new model if both 0 and 1 labels are available:
+        if labeled["label"].value_counts().shape[0] < 2:
+            return
+
+    try:
+        cycle_data = _read_cycle_data(project)
+
+        if cycle_data.feature_extractor:
+            try:
+                fm = project.get_feature_matrix(cycle_data.feature_extractor)
+                cycle = asr.ActiveLearningCycle.from_meta(
+                    cycle_data, skip_feature_extraction=True
+                )
+            except ValueError:
+                cycle = asr.ActiveLearningCycle.from_meta(cycle_data)
+                fm = cycle.transform(project.db.input.get_df())
+                project.add_feature_matrix(fm, cycle.feature_extractor.name)
+        else:
+            cycle = asr.ActiveLearningCycle.from_meta(cycle_data)
+            fm = project.db.input.get_df().values
+
+        if cycle.classifier is not None:
+            cycle.fit(
+                fm[labeled["record_id"].values],
+                labeled["label"].values,
+            )
+
+        ranked_record_ids = cycle.rank(fm)
+
+        with project.db as db:
+            db.add_last_ranking(
+                ranked_record_ids,
+                cycle_data.classifier if cycle_data.classifier is not None else None,
+                cycle_data.querier,
+                cycle_data.balancer if cycle_data.balancer is not None else None,
+                cycle_data.feature_extractor
+                if cycle_data.feature_extractor is not None
+                else None,
+                len(labeled),
+            )
+
+        project.remove_review_error()
+
+    except Exception as err:
+        # Transient SQLite lock contention is self-healing: the next label event
+        # re-triggers training, so don't surface it as an error to the user.
+        if isinstance(err, sqlite3.OperationalError) and "locked" in str(err).lower():
+            return
+        project.set_review_error(err)
+        raise err
+
+
+def run_simulation(project):
+    with project.db as db:
+        priors = db.get_priors()["record_id"].tolist()
+
+    cycles = [
+        asr.ActiveLearningCycle(
+            querier=TopDown(),
+            stopper=IsFittable(),
+        ),
+        asr.ActiveLearningCycle.from_meta(_read_cycle_data(project)),
+    ]
+
+    sim = Simulate(
+        project.db.input.get_df(),
+        project.db.input["included"],
+        cycles,
+        print_progress=False,
+        groups=project.db.input.get_groups(),
+    )
+    try:
+        sim.label(priors)
+        sim.review()
+    except Exception as err:
+        project.set_review_error(err)
+        raise err
+
+    project.update_review(status="finished")
+    sim.to_sql(project.db_path)

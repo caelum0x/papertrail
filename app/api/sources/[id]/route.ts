@@ -9,11 +9,12 @@ const IdSchema = z.string().uuid();
 
 export async function GET(
   _req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const start = Date.now();
 
-  const parsed = IdSchema.safeParse(params.id);
+  const { id: sourceId } = await params;
+  const parsed = IdSchema.safeParse(sourceId);
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid source id." }, { status: 400 });
   }

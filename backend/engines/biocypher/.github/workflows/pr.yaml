@@ -1,0 +1,49 @@
+name: Tests and code quality checks for pull requests
+
+on: [pull_request]
+
+jobs:
+  tests_and_code_quality:
+    strategy:
+      fail-fast: true
+      matrix:
+        os: ["ubuntu-latest", "macos-latest", "windows-latest"]
+        python-version: ["3.10", "3.11", "3.12"]
+        neo4j-version: ["4.4-enterprise", "5.17.0-enterprise"]
+        exclude:
+          # Windows tests don't use the PostgreSQL/Neo4j Docker containers
+          - os: "windows-latest"
+            neo4j-version: "4.4-enterprise"
+          # https://github.com/biocypher/biocypher/issues/339
+          - os: "macos-latest"
+            neo4j-version: "4.4-enterprise"
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+    #----------------------------------------------
+    #  checkout repo and set-up python and uv
+    #----------------------------------------------
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+    - name: Setup Python and uv
+      uses: ./.github/actions/setup
+      with:
+        PYTHON_VERSION: ${{ matrix.python-version }}
+    #----------------------------------------------
+    #       install dependencies
+    #----------------------------------------------
+    - name: Install dependencies
+      uses: ./.github/actions/install
+      with:
+        PYTHON_VERSION: ${{ matrix.python-version }}
+
+    #----------------------------------------------
+    #      run tests and code quality checks
+    #----------------------------------------------
+    - name: Run tests
+      uses: ./.github/actions/test
+      with:
+        NEO4J_VERSION: ${{ matrix.neo4j-version }}

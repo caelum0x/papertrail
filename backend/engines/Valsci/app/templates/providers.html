@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <div id="pageFeedback" class="status-card info-card hidden"></div>
+
+    <div class="status-card info-card">
+        <strong>How this relates to Settings.</strong>
+        <span>This page is the source of truth for which providers and models runs actually use. The <code>LLM_PROVIDER</code>/<code>LLM_BASE_URL</code>/<code>LLM_API_KEY</code>/<code>LLM_EVALUATION_MODEL</code> values on the <a href="{{ url_for('api.settings_page') }}">Settings</a> page only <em>seed</em> the "Default Config Provider" below. A model's context window and max output tokens set here take precedence over the <code>LOCAL_MODEL_CONTEXT_OVERRIDE</code> and <code>MODEL_REGISTRY_OVERRIDES</code> fallbacks in Settings. Per-task output budgets live in Settings → Model Routing &amp; Token Budgets.</span>
+    </div>
+
+    <section class="dashboard-grid provider-shell">
+        <article class="panel provider-sidebar">
+            <div class="panel-header">
+                <div>
+                    <h2 class="panel-title">Providers</h2>
+                    <p class="panel-subtitle">Enable providers and configure connections.</p>
+                </div>
+                <a href="{{ url_for('api.guidebook_page') }}#providers" class="help-link" title="Guidebook: Providers">?</a>
+            </div>
+            <div id="providerList" class="record-list"></div>
+        </article>
+
+        <article class="panel provider-editor" id="providerEditor">
+            <div class="panel-header">
+                <div>
+                    <div class="inline-actions">
+                        <h2 class="panel-title" id="editorTitle">Select a provider</h2>
+                        <span id="editorDirtyBadge" class="badge warning-badge hidden">Unsaved changes</span>
+                    </div>
+                    <p class="panel-subtitle" id="editorSubtitle">Choose a provider type from the sidebar to configure it.</p>
+                </div>
+            </div>
+
+            <input type="hidden" id="providerType" value="openai">
+            <input type="hidden" id="providerId" value="">
+            <input type="hidden" id="providerDefaultModel" value="">
+
+            <div class="section-stack">
+                <section class="panel panel-muted">
+                    <div class="panel-header">
+                        <div>
+                            <h3 class="panel-title">Connection</h3>
+                            <p class="panel-subtitle" id="connectionHint">Connection details for this provider type.</p>
+                        </div>
+                    </div>
+                    <div class="grid-two">
+                        <div class="form-row">
+                            <label for="providerLabel">Label</label>
+                            <input type="text" id="providerLabel" placeholder="Display name">
+                        </div>
+                        <div class="form-row" id="providerApiKeyGroup">
+                            <label for="providerApiKey">API Key</label>
+                            <input type="password" id="providerApiKey" placeholder="Leave blank to keep the stored key" autocomplete="new-password">
+                        </div>
+                    </div>
+                    <div class="grid-two">
+                        <div class="form-row" id="providerBaseUrlGroup">
+                            <label for="providerBaseUrl">Base URL (optional)</label>
+                            <input type="text" id="providerBaseUrl" placeholder="Only needed for non-default endpoints">
+                        </div>
+                    </div>
+                    <div class="grid-two hidden" id="openrouterSection">
+                        <div class="form-row">
+                            <label for="providerHttpReferer">HTTP Referer</label>
+                            <input type="text" id="providerHttpReferer" placeholder="Optional referer sent to OpenRouter">
+                        </div>
+                        <div class="form-row">
+                            <label for="providerSiteName">Site Name</label>
+                            <input type="text" id="providerSiteName" placeholder="Optional title sent to OpenRouter">
+                        </div>
+                    </div>
+                    <div class="grid-two hidden" id="azureOpenAiSection">
+                        <div class="form-row">
+                            <label for="providerAzureOpenAiEndpoint">Azure OpenAI Endpoint</label>
+                            <input type="text" id="providerAzureOpenAiEndpoint" placeholder="https://your-resource.openai.azure.com">
+                        </div>
+                        <div class="form-row">
+                            <label for="providerAzureOpenAiApiVersion">Azure OpenAI API Version</label>
+                            <input type="text" id="providerAzureOpenAiApiVersion" placeholder="2024-06-01">
+                        </div>
+                    </div>
+                    <div class="grid-two hidden" id="azureInferenceSection">
+                        <div class="form-row">
+                            <label for="providerAzureAiInferenceEndpoint">Azure AI Inference Endpoint</label>
+                            <input type="text" id="providerAzureAiInferenceEndpoint" placeholder="https://your-endpoint.inference.ai.azure.com">
+                        </div>
+                    </div>
+                </section>
+
+                <section class="panel panel-muted hidden" id="ollamaDiscoverySection">
+                    <div class="panel-header">
+                        <div>
+                            <h3 class="panel-title">Discover Models</h3>
+                            <p class="panel-subtitle">Discover available models from this Ollama endpoint.</p>
+                        </div>
+                    </div>
+                    <div class="grid-two">
+                        <div class="form-row">
+                            <label for="discoveryBaseUrl">Alternate URL</label>
+                            <input type="text" id="discoveryBaseUrl" placeholder="http://localhost:11434">
+                        </div>
+                        <div class="form-row">
+                            <label for="discoveryApiKey">Optional API Key</label>
+                            <input type="password" id="discoveryApiKey" placeholder="Only if your gateway expects bearer auth" autocomplete="new-password">
+                        </div>
+                    </div>
+                    <div class="inline-actions">
+                        <button type="button" class="secondary-button small-button" id="discoverProviderBtn">Discover From Provider URL</button>
+                        <button type="button" class="secondary-button small-button" id="discoverUrlBtn">Probe Alternate URL</button>
+                    </div>
+                </section>
+
+                <input type="hidden" id="taskDefaultQueryGeneration" value="">
+                <input type="hidden" id="taskDefaultPaperAnalysis" value="">
+                <input type="hidden" id="taskDefaultVenueScoring" value="">
+                <input type="hidden" id="taskDefaultFinalReport" value="">
+
+                <section class="panel panel-muted">
+                    <div class="panel-header">
+                        <div>
+                            <h3 class="panel-title">Models</h3>
+                            <p class="panel-subtitle">Model entries for selectors, pricing, and capabilities.</p>
+                        </div>
+                        <div class="inline-actions">
+                            <span id="modelCountBadge" class="badge neutral-badge">0 models</span>
+                            <button type="button" class="secondary-button small-button" id="addModelBtn">Add Model</button>
+                        </div>
+                    </div>
+                    <div id="modelRows" class="record-list"></div>
+                </section>
+
+                <div class="inline-actions">
+                    <button type="button" class="primary-button" id="saveProviderBtn">Save Provider</button>
+                    <button type="button" class="ghost-button" id="resetProviderBtn">Reset</button>
+                    <button type="button" class="danger-button hidden" id="deleteProviderBtn">Delete Provider</button>
+                </div>
+            </div>
+        </article>
+    </section>
+
+    <template id="modelRowTemplate">
+        <article class="record-card model-row">
+            <div class="panel-header">
+                <div>
+                    <h3 class="panel-title" data-model-title>New model</h3>
+                    <p class="panel-subtitle" data-model-summary>Set the model name, limits, pricing, and feature support.</p>
+                </div>
+                <button type="button" class="danger-button small-button" data-remove-model>Remove</button>
+            </div>
+            <div class="grid-three">
+                <div class="form-row">
+                    <label>Model Name</label>
+                    <input type="text" data-model-field="model_name" placeholder="gpt-4o" aria-label="Model name">
+                </div>
+                <div class="form-row">
+                    <label>Label</label>
+                    <input type="text" data-model-field="label" placeholder="Optional label" aria-label="Model label">
+                </div>
+                <div class="form-row">
+                    <label>Context Window</label>
+                    <input type="number" data-model-field="context_window_tokens" min="1" value="8192" aria-label="Context window tokens">
+                    <small class="helper-text">Total prompt + output capacity (tokens).</small>
+                </div>
+                <div class="form-row">
+                    <label>Max Output Tokens</label>
+                    <input type="number" data-model-field="max_output_tokens_default" min="1" value="1024" aria-label="Max output tokens per response">
+                    <small class="helper-text">Output budget per LLM call — the single place this is set. Reasoning ("thinking") models need a high value (e.g. 16000) or they run out mid-thought. Set per-stage overrides only under Settings → Model Routing if needed.</small>
+                </div>
+                <div class="form-row">
+                    <label>Input Cost ($ / 1M tokens)</label>
+                    <input type="number" data-model-field="input_cost_per_million" min="0" step="0.0001" value="0" placeholder="For cost estimation" aria-label="Input cost per million tokens">
+                </div>
+                <div class="form-row">
+                    <label>Output Cost ($ / 1M tokens)</label>
+                    <input type="number" data-model-field="output_cost_per_million" min="0" step="0.0001" value="0" placeholder="For cost estimation" aria-label="Output cost per million tokens">
+                </div>
+            </div>
+            <div class="inline-actions">
+                <label class="checkbox-row">
+                    <input type="checkbox" data-model-field="supports_temperature" checked>
+                    <span>Supports temperature</span>
+                </label>
+                <label class="checkbox-row">
+                    <input type="checkbox" data-model-field="supports_json_mode" checked>
+                    <span>Supports JSON mode</span>
+                </label>
+                <label class="checkbox-row">
+                    <input type="checkbox" data-model-field="enabled" checked>
+                    <span>Enabled in selectors</span>
+                </label>
+            </div>
+        </article>
+    </template>
+
+    <div id="ollamaImportModal" class="modal hidden">
+        <div class="modal-card">
+            <div class="panel-header">
+                <div>
+                    <h2 class="panel-title">Import Discovered Models</h2>
+                    <p class="panel-subtitle">Select models to merge or replace. Nothing is saved until you save the provider.</p>
+                </div>
+                <span id="ollamaImportCount" class="badge neutral-badge">0 selected</span>
+            </div>
+            <div class="grid-two">
+                <div class="form-row">
+                    <label for="ollamaSearch">Filter</label>
+                    <input type="text" id="ollamaSearch" placeholder="Search discovered models">
+                </div>
+                <div class="form-row">
+                    <label>Discovery Source</label>
+                    <div id="ollamaSourceLabel" class="helper-text"></div>
+                </div>
+            </div>
+            <div class="inline-actions">
+                <button type="button" class="secondary-button small-button" id="ollamaSelectVisibleBtn">Select Visible</button>
+                <button type="button" class="secondary-button small-button" id="ollamaClearVisibleBtn">Clear Visible</button>
+            </div>
+            <div id="ollamaImportStatus" class="helper-text"></div>
+            <div id="ollamaImportList" class="record-list"></div>
+            <div class="inline-actions">
+                <button type="button" class="primary-button" id="ollamaAddModelsBtn">Add Models</button>
+                <button type="button" class="ghost-button" id="ollamaImportCancelBtn">Cancel</button>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+    <script src="{{ url_for('static', filename='providers.js') }}"></script>
+{% endblock %}

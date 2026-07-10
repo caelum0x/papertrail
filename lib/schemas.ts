@@ -46,6 +46,40 @@ export const VerificationResultSchema = z.object({
 });
 export type VerificationResult = z.infer<typeof VerificationResultSchema>;
 
+// --- Evidence synthesis (meta-analysis) --------------------------------------
+
+// One study supplied to the synthesis endpoint: either a point estimate + CI on
+// the ratio scale, or raw 2x2 counts (validated further by the engine).
+export const SynthesisStudyInputSchema = z
+  .object({
+    label: z.string().trim().min(1).max(200),
+    measure: z.enum(["RR", "HR", "OR"]),
+    point: z.number().positive().optional(),
+    ci_lower: z.number().positive().optional(),
+    ci_upper: z.number().positive().optional(),
+    ci_pct: z.number().min(50).max(99.9).optional(),
+    events1: z.number().int().nonnegative().optional(),
+    total1: z.number().int().positive().optional(),
+    events2: z.number().int().nonnegative().optional(),
+    total2: z.number().int().positive().optional(),
+  })
+  .refine(
+    (s) =>
+      (s.point !== undefined && s.ci_lower !== undefined && s.ci_upper !== undefined) ||
+      (s.events1 !== undefined &&
+        s.total1 !== undefined &&
+        s.events2 !== undefined &&
+        s.total2 !== undefined),
+    { message: "Provide either point+ci_lower+ci_upper, or all four 2x2 counts." }
+  );
+export type SynthesisStudyInput = z.infer<typeof SynthesisStudyInputSchema>;
+
+export const SynthesisRequestSchema = z.object({
+  claim: z.string().trim().min(10).max(2000),
+  studies: z.array(SynthesisStudyInputSchema).min(2).max(100),
+});
+export type SynthesisRequest = z.infer<typeof SynthesisRequestSchema>;
+
 export const SourceCandidateSchema = z.object({
   id: z.string(),
   source_type: z.enum(["pubmed", "clinicaltrials"]),

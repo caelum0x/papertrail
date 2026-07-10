@@ -11,6 +11,34 @@ import { z } from "zod";
 // console can render the catalog grid and per-provider config forms from the same
 // source of truth the server validates against.
 
+// Rejects URLs that point at private/loopback addresses to prevent SSRF. Used
+// by all provider schemas that store an outbound URL in their config.
+// `URL` is available in both browser and Node so this file stays client-safe.
+function isPrivateUrl(raw: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false; // malformed URLs are rejected by .url() before reaching here
+  }
+  const host = url.hostname.toLowerCase();
+  if (host === "localhost" || host === "::1" || host === "0.0.0.0") return true;
+  const v4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (v4) {
+    const [, a, b] = v4.map(Number);
+    if (a === 127) return true; // loopback
+    if (a === 10) return true; // RFC 1918 class A
+    if (a === 172 && b >= 16 && b <= 31) return true; // RFC 1918 class B
+    if (a === 192 && b === 168) return true; // RFC 1918 class C
+    if (a === 169 && b === 254) return true; // link-local / AWS metadata
+  }
+  if (host.startsWith("[::") || host === "::1") return true; // IPv6 loopback
+  if (/^\[f[cde]/i.test(host)) return true; // fc00::/7 unique-local, fe80:: link-local
+  return false;
+}
+
+const SSRF_MSG = "URL must not target private or loopback addresses.";
+
 // The set of supported providers. Kept as a const tuple so we can derive both a
 // Zod enum and a TypeScript union from one declaration.
 export const PROVIDERS = [
@@ -106,12 +134,12 @@ const WEBHOOK_CAPS: ProviderCapabilities = {
 };
 
 const slackSchema = z.object({
-  webhookUrl: z.string().url(),
+  webhookUrl: z.string().url().refine((v) => !isPrivateUrl(v), SSRF_MSG),
   channel: z.string().trim().min(1).max(80).optional(),
 });
 
 const msteamsSchema = z.object({
-  webhookUrl: z.string().url(),
+  webhookUrl: z.string().url().refine((v) => !isPrivateUrl(v), SSRF_MSG),
 });
 
 const emailSchema = z.object({
@@ -148,7 +176,7 @@ const s3Schema = z.object({
 });
 
 const genericWebhookSchema = z.object({
-  url: z.string().url(),
+  url: z.string().url().refine((v) => !isPrivateUrl(v), SSRF_MSG),
   secret: z.string().trim().min(1).max(256).optional(),
   method: z.enum(["POST", "PUT"]).default("POST"),
 });

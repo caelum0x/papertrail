@@ -1,0 +1,114 @@
+
+
+[project]
+name = "biocypher"
+version = "0.15.2"
+description = "A unifying framework for biomedical research knowledge graphs"
+authors = [
+    {name = "Sebastian Lobentanzer", email = "sebastian.lobentanzer@gmail.com"},
+    {name = "Denes Turei", email = "turei.denes@gmail.com"}
+]
+license = {text = "Apache-2.0"}
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Natural Language :: English",
+    "Topic :: Scientific/Engineering :: Bio-Informatics"
+]
+keywords = ["bioinformatics", "knowledge-graph", "graph-database", "biomedical-data"]
+dependencies = [
+    "PyYAML>=5.0",
+    "more_itertools",
+    "appdirs",
+    "treelib==1.6.4",
+    "rdflib>=6.2.0",
+    "networkx>=3.0",
+    "pandas>=2.0.1",
+    "pooch>=1.7.0",
+    "tqdm>=4.65.0",
+    "toml>=0.10.2"
+]
+
+[project.urls]
+Homepage = "https://biocypher.org"
+Documentation = "https://biocypher.org"
+Repository = "https://github.com/biocypher/biocypher"
+Issues = "https://github.com/biocypher/biocypher/issues"
+"Bug Tracker" = "https://github.com/biocypher/biocypher/issues"
+
+[project.optional-dependencies]
+neo4j = ["neo4j>=5.0"]
+scirpy = ["scirpy>=0.22.0"]
+
+[dependency-groups]
+dev = [
+    "mkdocs-material>=9.5",
+    "mkdocstrings-python>=1.12",
+    "mkdocs-jupyter>=0.25",
+    "neoteroi-mkdocs>=1.1.0",
+    "pytest>=6.0",
+    "pre-commit>=2.17.0",
+    "coverage>=6.0",
+    "pytest-cov>=3.0.0",
+    "hypothesis>=6.50.1",
+    "ipython>=8.7.0",
+    "ipykernel>=6.23.1",
+    "coverage-badge>=1.1.0",
+    "nbsphinx>=0.9.6",
+    "ruff>=0.2.0",
+    "mike>=2.1.3"
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["biocypher"]
+
+[tool.pytest.ini_options]
+log_cli = true
+log_level = "INFO"
+markers = [
+  "requires_neo4j: Requires connection to a Neo4j server",
+  "requires_postgresql: Requires connection to a PostgreSQL server",
+  "inject_driver_args(driver_args): Arguments for the Driver",
+]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["ALL"]
+# Exclude directories similar to your black configuration
+exclude = [
+    ".eggs",
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".tox",
+    ".venv",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+]
+
+[tool.ruff.lint.pycodestyle]
+max-doc-length = 80
+
+[tool.ruff.lint.per-file-ignores]
+"test/*" = ["ANN001", "ANN201", "D100", "D101", "D102", "D103", "D104", "I001", "S101"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["numpy", "pandas"]
+combine-as-imports = true
+lines-between-types = 1
+force-wrap-aliases = true
+split-on-trailing-comma = true

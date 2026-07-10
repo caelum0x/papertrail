@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <section class="panel">
+        <div class="stepper">
+            <div class="step-item active">
+                <strong>Step 1</strong>
+                <span>Choose provider</span>
+            </div>
+            <div class="step-item active">
+                <strong>Step 2</strong>
+                <span>Choose models</span>
+            </div>
+            <div class="step-item active">
+                <strong>Step 3</strong>
+                <span>Add claims</span>
+            </div>
+            <div class="step-item active">
+                <strong>Step 4</strong>
+                <span>Review and launch</span>
+            </div>
+        </div>
+    </section>
+
+    <section class="dashboard-grid">
+        <article class="panel">
+            <div class="panel-header">
+                <div>
+                    <h2 class="panel-title">Default Arena Flow</h2>
+                    <p class="panel-subtitle">Each model you check becomes a candidate that runs on every claim. By default a candidate uses one model for all four pipeline stages; you can override individual stages from its card.</p>
+                </div>
+                <a href="{{ url_for('api.guidebook_page') }}#arena-builder" class="help-link" title="Guidebook: Arena Builder">?</a>
+            </div>
+
+            <div id="arenaStatus" class="status-card info-card hidden"></div>
+
+            <div class="stack">
+                <div class="form-row">
+                    <label for="arenaTitle">Arena Title</label>
+                    <input type="text" id="arenaTitle" placeholder="Optional arena title">
+                </div>
+                <div id="providerBlocks" class="section-stack"></div>
+                <p class="helper-text">Each checked model becomes a candidate on the right. Open Advanced Arena Settings for multi-provider comparisons and retrieval reuse.</p>
+            </div>
+
+            <div class="panel-divider"></div>
+
+            <div class="stack">
+                <div class="form-row">
+                    <label for="claimInput">Claims</label>
+                    <textarea id="claimInput" placeholder="Enter one claim per line"></textarea>
+                </div>
+                <div class="grid-two">
+                    <div class="form-row">
+                        <label for="claimFile">Upload Claims</label>
+                        <input type="file" id="claimFile" accept=".txt">
+                    </div>
+                    <div class="form-row">
+                        <label for="batchTags">Batch Tags</label>
+                        <input type="text" id="batchTags" placeholder="Optional comma-separated tags">
+                    </div>
+                </div>
+                <div class="inline-actions">
+                    <button type="button" class="secondary-button" id="stageClaimsBtn">Stage Claims</button>
+                    <button type="button" class="ghost-button" id="clearClaimsBtn">Clear</button>
+                </div>
+                <div id="stagedClaims" class="staged-list"></div>
+            </div>
+        </article>
+
+        <div class="section-stack">
+            <article class="panel">
+                <div class="panel-header">
+                    <div>
+                        <h2 class="panel-title">Candidates</h2>
+                        <p class="panel-subtitle">Each card shows exactly what will run. "One model" runs the same model for all four stages; expand a card to give a stage its own model.</p>
+                    </div>
+                </div>
+                <div id="candidatePreview" class="record-list"></div>
+            </article>
+
+            <article class="panel">
+                <div class="panel-header">
+                    <div>
+                        <h2 class="panel-title">Review and Launch</h2>
+                        <p class="panel-subtitle">Review cost and launch.</p>
+                    </div>
+                </div>
+                <div id="launchReview" class="stack">
+                    <div class="empty-state">
+                        <strong>Select models and stage claims first.</strong>
+                        <span>The review summary will update once the arena has enough information to estimate cost.</span>
+                    </div>
+                </div>
+                <div class="panel-divider"></div>
+                <div class="inline-actions">
+                    <button type="button" class="primary-button" id="launchArenaBtn">Review &amp; Launch Arena</button>
+                </div>
+            </article>
+        </div>
+    </section>
+
+    <details class="panel panel-muted">
+        <summary><strong>Advanced Arena Settings</strong></summary>
+        <div class="panel-divider"></div>
+        <div class="grid-two">
+            <div class="form-row">
+                <label for="executionMode">Execution Mode</label>
+                <select id="executionMode">
+                    <option value="full_pipeline">Default mode: same model for all stages</option>
+                    <option value="reuse_retrieval">Reuse retrieval: candidate A supplies retrieval</option>
+                </select>
+            </div>
+            <div class="form-row">
+                <label for="stopAfter">Stop After</label>
+                <select id="stopAfter">
+                    <option value="query_generation">Query Generation</option>
+                    <option value="paper_analysis">Review Evidence</option>
+                    <option value="venue_scoring">Review Scores</option>
+                    <option value="final_report" selected>Final Reports</option>
+                </select>
+            </div>
+        </div>
+        <div class="grid-three">
+            <div class="form-row">
+                <label for="duplicateStrategy">Duplicate Strategy</label>
+                <select id="duplicateStrategy">
+                    <option value="rerun">Create New Runs</option>
+                    <option value="view">Open Existing Claim</option>
+                </select>
+            </div>
+            <div class="form-row">
+                <label for="numQueries">Queries</label>
+                <input type="number" id="numQueries" min="1" max="20" value="5">
+            </div>
+            <div class="form-row">
+                <label for="resultsPerQuery">Results / Query</label>
+                <input type="number" id="resultsPerQuery" min="1" max="10" value="5">
+            </div>
+        </div>
+        <label class="checkbox-row">
+            <input type="checkbox" id="useBibliometrics" checked>
+            <span>Use bibliometric scoring</span>
+        </label>
+        <div class="panel-divider"></div>
+        <div class="panel-header">
+            <div>
+                <h3 class="panel-title">Advanced Provider Setup</h3>
+                <p class="panel-subtitle">Add a second provider for cross-provider comparisons.</p>
+            </div>
+            <button type="button" class="ghost-button small-button" id="addProviderBlockBtn">Add Provider Block</button>
+        </div>
+        <p class="helper-text">Candidate labels and per-stage model overrides are edited directly on each candidate card under "Candidates".</p>
+    </details>
+
+    <div id="costModal" class="modal hidden">
+        <div class="modal-card">
+            <div class="panel-header">
+                <div>
+                    <h2 class="panel-title">Confirm Arena Launch</h2>
+                    <p class="panel-subtitle">Review cost, claim count, and retrieval reuse before queueing the comparison.</p>
+                </div>
+            </div>
+            <div id="costModalBody" class="stack"></div>
+            <label class="checkbox-row">
+                <input type="checkbox" id="confirmCostCheckbox">
+                <span>I approve this arena spend and want to launch the comparison.</span>
+            </label>
+            <div class="inline-actions">
+                <button type="button" class="secondary-button" id="cancelCostBtn">Cancel</button>
+                <button type="button" class="primary-button" id="confirmCostBtn" disabled>Launch Arena</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        window.arenaBuilderConfig = {
+            providers: {{ providers|tojson }},
+        };
+    </script>
+{% endblock %}
+
+{% block scripts %}
+    <script src="{{ url_for('static', filename='arena_builder.js') }}"></script>
+{% endblock %}

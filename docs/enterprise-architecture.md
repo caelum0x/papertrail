@@ -22,6 +22,16 @@ PaperTrail becomes an enterprise evidence-verification and research platform for
 
 ## Modules (by wave)
 
+> **As-built note.** This table is the planning blueprint (waves 1–4). The shipped
+> platform also grew a layer of 14 Claude-heavy research features (copilot, paper-QA,
+> synthesis, deep-research, data-chat, screening rank, full-paper extraction, hypotheses,
+> smart-citations, drafting, knowledge graph, bring-your-own-source verify, entailment
+> fact-check, meta cross-check) and six opt-in OSS subprocess engines (PaperQA2, STORM,
+> ASReview, MiniCheck, PyMARE, pyalex/OpenAlex). Those are catalogued route-by-route in
+> the README's [Claude-powered capabilities](../README.md#claude-powered-capabilities)
+> and [Digested OSS engines](../README.md#digested-oss-engines) sections; the measured
+> SciFact benchmark is in [`benchmark.md`](benchmark.md).
+
 | Wave | Module | Pages | APIs | Purpose |
 |---|---|---|---|---|
 | W1 | Auth & Identity | 11 | 18 | UPGRADE (not greenfield): session auth already exists (pt_session httpOnly JWT via jose/HS256 in lib/auth/sess |

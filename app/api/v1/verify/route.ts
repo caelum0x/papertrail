@@ -11,6 +11,7 @@ import { checkRateLimit } from "@/lib/rateLimit";
 import { logEvent } from "@/lib/logger";
 import { resolveOrgFromApiKey } from "@/lib/webhooks/apiKeyAuth";
 import { dispatchEvent } from "@/lib/webhooks/dispatch";
+import { sanitizeClaimText } from "@/lib/api/claimInput";
 
 export const runtime = "nodejs";
 
@@ -59,7 +60,13 @@ export async function POST(req: NextRequest) {
     if (!parsed.success) {
       return fail(parsed.error.issues[0]?.message ?? "Invalid input.", 400);
     }
-    const { claim, source_hint } = parsed.data;
+    // Character-quality hardening on top of Zod's shape/length checks.
+    const sanitized = sanitizeClaimText(parsed.data.claim);
+    if (!sanitized.ok) {
+      return fail(sanitized.error, 400);
+    }
+    const claim = sanitized.value;
+    const { source_hint } = parsed.data;
     const parsedHint = source_hint ? parseSourceId(source_hint) : null;
 
     // 4. Run the verification pipeline (same agents as the console pipeline).

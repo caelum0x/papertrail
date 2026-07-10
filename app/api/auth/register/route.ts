@@ -5,8 +5,12 @@ import { hashPassword } from "@/lib/auth/password";
 import { createSession } from "@/lib/auth/session";
 import { created, fail } from "@/lib/api/response";
 import { writeAudit } from "@/lib/audit";
+import { checkRateLimit } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
+
+// Throttle spam/enumeration/resource exhaustion: max 3 registrations per IP per hour.
+const REGISTER_RATE_LIMIT = { max: 3, windowMs: 60 * 60 * 1000 };
 
 const registerSchema = z.object({
   email: z.string().email().max(320),
@@ -28,6 +32,12 @@ function slugify(input: string): string {
 
 export async function POST(req: NextRequest): Promise<Response> {
   try {
+    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const rate = checkRateLimit(`register:${ip}`, REGISTER_RATE_LIMIT);
+    if (!rate.allowed) {
+      return fail("Too many registration attempts. Please try again later.", 429);
+    }
+
     const json = await req.json().catch(() => null);
     const parsed = registerSchema.safeParse(json);
     if (!parsed.success) {

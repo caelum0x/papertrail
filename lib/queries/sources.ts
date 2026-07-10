@@ -56,8 +56,10 @@ export async function listSources({
   const pool = getPool();
 
   // Search matches either the human title or the external id (e.g. PMID/NCT).
-  const whereClause = q ? "WHERE title ILIKE $1 OR external_id ILIKE $1" : "";
-  const pattern = q ? `%${q}%` : null;
+  // Escape LIKE metacharacters so user input is treated literally (prevents a
+  // string of % / _ chars from scanning the entire table on every keystroke).
+  const whereClause = q ? "WHERE title ILIKE $1 ESCAPE '\\' OR external_id ILIKE $1 ESCAPE '\\'" : "";
+  const pattern = q ? `%${q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%` : null;
 
   const listParams: unknown[] = q ? [pattern, limit, offset] : [limit, offset];
   const limitIdx = q ? "$2" : "$1";

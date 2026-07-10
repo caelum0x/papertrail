@@ -4,6 +4,7 @@ import { splitIntoClaims } from "@/lib/claimSplitter";
 import { logEvent } from "@/lib/logger";
 import { runBatch } from "@/lib/agents/batchAgent";
 import { BatchResultItem } from "@/components/BatchResults";
+import { sanitizeClaimText } from "@/lib/api/claimInput";
 
 export const runtime = "nodejs";
 
@@ -40,9 +41,18 @@ export async function POST(req: NextRequest) {
   }
 
   // Build the candidate claim list: explicit claims[] wins; otherwise split the passage.
-  const rawClaims = Array.isArray(body.claims)
+  const candidateClaims = Array.isArray(body.claims)
     ? body.claims.map((c) => (typeof c === "string" ? c.trim() : "")).filter((c) => c.length > 0)
     : splitIntoClaims(body.text ?? "");
+
+  // Character-quality hardening: drop any candidate with control chars / invisible
+  // smuggling / degenerate repetition before it reaches the agent chain. Returns the
+  // cleaned string for the survivors. Invalid candidates are silently skipped (same
+  // spirit as filtering empties above) rather than failing the whole batch.
+  const rawClaims = candidateClaims
+    .map((c) => sanitizeClaimText(c))
+    .filter((r): r is { ok: true; value: string } => r.ok)
+    .map((r) => r.value);
 
   if (rawClaims.length === 0) {
     return NextResponse.json(

@@ -1,0 +1,192 @@
+import warnings
+
+from biocypher._mapping import OntologyMapping
+
+# TODO migrate as appropriate from test translate
+
+
+def test_inheritance_loop(ontology_mapping):
+    assert "gene to variant association" in ontology_mapping.schema.keys()
+
+    assert "gene to variant association" not in ontology_mapping.extended_schema.keys()
+
+
+def test_virtual_leaves_node(ontology_mapping):
+    assert "wikipathways.pathway" in ontology_mapping.extended_schema
+
+
+def test_getting_properties_via_config(ontology_mapping):
+    assert "name" in ontology_mapping.extended_schema["protein"].get("properties").keys()
+
+
+def test_preferred_id_optional(ontology_mapping):
+    pti = ontology_mapping.extended_schema.get("post translational interaction")
+
+    assert pti.get("preferred_id") == "id"
+
+
+def test_namespace_accepted_as_preferred_id():
+    """Schema entries using 'namespace' are normalised to 'preferred_id' internally."""
+    m = OntologyMapping()
+    m.schema = {
+        "protein": {
+            "represented_as": "node",
+            "namespace": "uniprot",
+            "input_label": "protein",
+        }
+    }
+    extended = m._extend_schema(d=m.schema)
+    assert extended["protein"]["preferred_id"] == "uniprot"
+    assert "namespace" not in extended["protein"]
+
+
+def test_preferred_id_in_schema_emits_deprecation_warning():
+    """Schema entries still using 'preferred_id' trigger a DeprecationWarning."""
+    m = OntologyMapping()
+    m.schema = {
+        "protein": {
+            "represented_as": "node",
+            "preferred_id": "uniprot",
+            "input_label": "protein",
+        }
+    }
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        extended = m._extend_schema(d=m.schema)
+
+    dep_warnings = [w for w in caught if issubclass(w.category, DeprecationWarning)]
+    assert len(dep_warnings) == 1
+    assert "preferred_id" in str(dep_warnings[0].message)
+    assert "namespace" in str(dep_warnings[0].message)
+    assert extended["protein"]["preferred_id"] == "uniprot"
+
+
+def test_input_label_accepted_as_label_in_input():
+    """Schema entries using 'input_label' work without any warning."""
+    m = OntologyMapping()
+    m.schema = {
+        "protein": {
+            "represented_as": "node",
+            "input_label": "protein",
+        }
+    }
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        extended = m._extend_schema(d=m.schema)
+
+    dep_warnings = [w for w in caught if issubclass(w.category, DeprecationWarning)]
+    assert len(dep_warnings) == 0
+    assert extended["protein"]["input_label"] == "protein"
+
+
+def test_inherit_properties_merges_parent_exclude_properties():
+    """Children with inherit_properties inherit parent exclude_properties as a list.
+
+    Previously this raised ValueError/AttributeError because the code initialised
+    exclude_properties as a dict and called .update() on it with a string/list value.
+    """
+    m = OntologyMapping()
+    m.schema = {
+        "parent entity": {
+            "represented_as": "node",
+            "namespace": "uniprot",
+            "input_label": "parent",
+            "properties": {"name": "str", "sequence": "str"},
+            "exclude_properties": "sequence",
+        },
+        "child entity": {
+            "is_a": "parent entity",
+            "represented_as": "node",
+            "namespace": "uniprot",
+            "input_label": "child",
+            "inherit_properties": True,
+        },
+    }
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        extended = m._extend_schema(d=m.schema)
+
+    child = extended["child entity"]
+    assert "sequence" in child["exclude_properties"]
+    assert "name" in child["properties"]
+    assert "sequence" in child["properties"]
+
+
+def test_inherit_properties_merges_parent_exclude_properties_list():
+    """Parent exclude_properties defined as a list is correctly merged into child."""
+    m = OntologyMapping()
+    m.schema = {
+        "parent entity": {
+            "represented_as": "node",
+            "namespace": "uniprot",
+            "input_label": "parent",
+            "properties": {"name": "str", "seq": "str", "accession": "str"},
+            "exclude_properties": ["seq", "accession"],
+        },
+        "child entity": {
+            "is_a": "parent entity",
+            "represented_as": "node",
+            "namespace": "uniprot",
+            "input_label": "child",
+            "inherit_properties": True,
+        },
+    }
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        extended = m._extend_schema(d=m.schema)
+
+    child = extended["child entity"]
+    assert "seq" in child["exclude_properties"]
+    assert "accession" in child["exclude_properties"]
+
+
+def test_inherit_properties_child_exclude_not_overwritten():
+    """Child's own exclude_properties are preserved and parent's are appended."""
+    m = OntologyMapping()
+    m.schema = {
+        "parent entity": {
+            "represented_as": "node",
+            "namespace": "uniprot",
+            "input_label": "parent",
+            "properties": {"name": "str", "seq": "str", "local": "str"},
+            "exclude_properties": "seq",
+        },
+        "child entity": {
+            "is_a": "parent entity",
+            "represented_as": "node",
+            "namespace": "uniprot",
+            "input_label": "child",
+            "inherit_properties": True,
+            "exclude_properties": "local",
+        },
+    }
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        extended = m._extend_schema(d=m.schema)
+
+    child = extended["child entity"]
+    excl = child["exclude_properties"]
+    assert "local" in excl
+    assert "seq" in excl
+
+
+def test_label_in_input_emits_deprecation_warning():
+    """Schema entries using the old 'label_in_input' field trigger a DeprecationWarning."""
+    m = OntologyMapping()
+    m.schema = {
+        "protein": {
+            "represented_as": "node",
+            "label_in_input": "protein",
+        }
+    }
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        extended = m._extend_schema(d=m.schema)
+
+    dep_warnings = [w for w in caught if issubclass(w.category, DeprecationWarning)]
+    assert len(dep_warnings) == 1
+    assert "label_in_input" in str(dep_warnings[0].message)
+    assert "input_label" in str(dep_warnings[0].message)
+    # field is normalised to 'input_label' after the warning
+    assert extended["protein"].get("input_label") == "protein"
+    assert "label_in_input" not in extended["protein"]

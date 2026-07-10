@@ -11,19 +11,24 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "ingest:test-set": "tsx scripts/ingest-test-set.ts",
     "seed": "tsx scripts/seed-db.ts",
-    "eval": "tsx scripts/eval.ts"
+    "eval": "tsx scripts/eval.ts",
+    "bench": "tsx scripts/benchmark/run.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.27.0",
     "bcryptjs": "^3.0.3",
+    "eslint-config-next": "^16.2.10",
     "fast-xml-parser": "^5.9.3",
     "jose": "^6.2.3",
-    "next": "14.2.35",
+    "mammoth": "^1.12.0",
+    "next": "^16.2.10",
+    "pdf-lib": "^1.17.1",
     "pg": "^8.12.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
     "simple-statistics": "^7.9.3",
     "unpdf": "^1.6.2",
+    "xlsx": "^0.18.5",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -44,5 +49,6 @@
     "tsx": "^4.16.5",
     "typescript": "^5.5.4",
     "vitest": "^2.0.5"
-  }
+  },
+  "license": "Apache-2.0"
 }

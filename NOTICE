@@ -1,0 +1,49 @@
+PaperTrail
+Copyright 2026 Umut Arhan Subaşı
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+================================================================================
+THIRD-PARTY SOFTWARE
+================================================================================
+
+PaperTrail's engines were ported into native TypeScript from, and/or retain
+source under `backend/engines/`, the following open-source projects. Each is
+used under its own permissive license. We gratefully acknowledge these projects
+and their authors:
+
+  Project                Upstream                                     License
+  ---------------------  -------------------------------------------  ------------
+  PaperQA2               github.com/Future-House/paper-qa             Apache-2.0
+  STORM                  github.com/stanford-oval/storm              MIT
+  GPT Researcher         github.com/assafelovic/gpt-researcher       Apache-2.0
+  Open Deep Research     github.com/langchain-ai/open_deep_research  MIT
+  ASReview               github.com/asreview/asreview                Apache-2.0
+  MiniCheck              github.com/Liyan06/MiniCheck                MIT
+  MultiVerS              github.com/dwadden/multivers                Apache-2.0
+  Loki / OpenFactVerif   github.com/Libr-AI/OpenFactVerification     MIT
+  Valsci                 github.com/bricee98/Valsci                  MIT
+  SciPhi R2R             github.com/SciPhi-AI/R2R                     MIT
+  PyMARE                 github.com/neurostuff/PyMARE                MIT
+  pyalex                 github.com/J535D165/pyalex                  MIT
+  INDRA                  github.com/sorgerlab/indra                  BSD-2-Clause
+  scispaCy               github.com/allenai/scispacy                 Apache-2.0
+  PyKEEN                 github.com/pykeen/pykeen                    MIT
+  pytrials               github.com/jvfe/pytrials                    MIT
+  BioCypher              github.com/biocypher/biocypher              MIT
+  Docling                github.com/DS4SD/docling                    MIT
+  unpdf                  github.com/unjs/unpdf                       MIT
+
+GPL/AGPL-licensed projects were deliberately NOT vendored or copied. Where their
+published approach informed PaperTrail (e.g. metafor's trim-and-fill), only the
+public algorithm was reimplemented independently.
+
+--------------------------------------------------------------------------------
+OPEN BIO-DATA SOURCES
+--------------------------------------------------------------------------------
+
+PaperTrail consumes public biomedical data sources, each under its own terms:
+Open Targets (CC0), GWAS Catalog, ClinVar, ChEMBL (CC BY-SA 3.0), PharmGKB
+(CC BY-SA 4.0), openFDA / FAERS, PubTator, PubMed / NCBI E-utilities,
+ClinicalTrials.gov, and OpenAlex. PaperTrail records each source's license and
+access timestamp in its data-source provenance registry.

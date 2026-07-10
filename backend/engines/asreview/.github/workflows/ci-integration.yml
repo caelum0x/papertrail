@@ -1,0 +1,50 @@
+name: Test ASReview webapp (integration)
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  selenium-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        browser: # must be valid values that can be passed to pytest's --driver option
+          - 'chrome'
+        reverse_proxy: # whether to test with a reverse proxy in front of asreview
+          - false
+          # - true
+        post_logout_url: #
+          - '' # default is /signin
+          # - /custom_logout_page
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v3
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: "asreview/webapp/package-lock.json"
+      - uses: nanasess/setup-chromedriver@v2
+        if: matrix.browser == 'chrome'
+      - name: Install requirements
+        run: pip3 install .[test] setuptools gunicorn
+      - name: Compile assets
+        run: python setup.py compile_assets
+      - name: Install ASReview from source
+        run: |
+          pip3 install .
+      - name: Run chromedriver
+        if: matrix.browser == 'chrome'
+        run: |
+          export DISPLAY=:99
+          chromedriver --url-base=/wd/hub &
+      - name: Run tests
+        run: |
+          export TEST_REVERSE_PROXY="${{ matrix.reverse_proxy }}"
+          export DRIVER="${{ matrix.browser }}"
+          asreview/webapp/tests/integration_tests/run_tests.sh

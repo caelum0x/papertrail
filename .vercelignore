@@ -1,0 +1,6 @@
+# Owned OSS source we ported from — not needed by the Next.js build (excluded from tsc too)
+backend/
+python/
+reference/
+.claude/
+*.log

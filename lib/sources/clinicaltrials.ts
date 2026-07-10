@@ -204,3 +204,104 @@ export async function searchTrials(query: string, pageSize = 5): Promise<TrialRe
     };
   });
 }
+
+// A trial candidate for the CLINICAL TRIAL MATCHER: carries the raw eligibility
+// criteria text (so each criterion can be grounded verbatim) plus the structured
+// eligibility gates the registry exposes directly (sex, age bounds, healthy-volunteer
+// flag) and enough context (conditions, brief summary, status) to reason about fit.
+export interface TrialCandidate {
+  nctId: string;
+  title: string;
+  url: string;
+  phase: string | null;
+  enrollmentCount: number | null;
+  overallStatus: string | null;
+  conditions: string[];
+  briefSummary: string;
+  /** Raw eligibility criteria text — the source of truth every criterion is grounded to. */
+  eligibilityCriteria: string;
+  sex: string | null; // "ALL" | "FEMALE" | "MALE"
+  minAge: string | null; // e.g. "18 Years"
+  maxAge: string | null; // e.g. "75 Years"
+  healthyVolunteers: boolean | null;
+}
+
+/**
+ * Search ClinicalTrials.gov for candidate trials to match a patient against, requesting
+ * the eligibility + status + conditions fields the matcher needs. Reuses the same v2 API
+ * base and protocolSection parsing style as searchTrials, but returns the eligibility-rich
+ * TrialCandidate shape (raw criteria text preserved for verbatim grounding) rather than the
+ * pooled-summary TrialRecord shape used by the verification pipeline.
+ */
+export async function searchTrialsForMatching(
+  query: string,
+  pageSize = 6
+): Promise<TrialCandidate[]> {
+  const params = new URLSearchParams({
+    "query.term": query,
+    pageSize: String(pageSize),
+    format: "json",
+    fields: [
+      "NCTId",
+      "BriefTitle",
+      "BriefSummary",
+      "Condition",
+      "EligibilityCriteria",
+      "Sex",
+      "MinimumAge",
+      "MaximumAge",
+      "HealthyVolunteers",
+      "OverallStatus",
+      "Phase",
+      "EnrollmentCount",
+    ].join(","),
+  });
+
+  const res = await fetch(`${CTGOV_BASE}?${params}`);
+  if (!res.ok) throw new Error(`ClinicalTrials.gov search failed: ${res.status}`);
+  const data = await res.json();
+
+  const studies = data?.studies ?? [];
+  return studies.map((s: any): TrialCandidate => {
+    const proto = s?.protocolSection ?? {};
+    const idModule = proto.identificationModule ?? {};
+    const descModule = proto.descriptionModule ?? {};
+    const eligModule = proto.eligibilityModule ?? {};
+    const designModule = proto.designModule ?? {};
+    const statusModule = proto.statusModule ?? {};
+    const condModule = proto.conditionsModule ?? {};
+
+    const nctId = idModule.nctId ?? "unknown";
+    const title = idModule.briefTitle ?? "";
+    const briefSummary = descModule.briefSummary ?? "";
+    const eligibilityCriteria = eligModule.eligibilityCriteria ?? "";
+
+    const conditions: string[] = Array.isArray(condModule.conditions)
+      ? condModule.conditions.filter((c: unknown): c is string => typeof c === "string")
+      : [];
+
+    const phases: string[] = Array.isArray(designModule.phases) ? designModule.phases : [];
+    const phase = phases.length > 0 ? phases.join("/") : null;
+    const rawCount = designModule.enrollmentInfo?.count;
+    const enrollmentCount = typeof rawCount === "number" ? rawCount : null;
+
+    const hv = eligModule.healthyVolunteers;
+    const healthyVolunteers = typeof hv === "boolean" ? hv : null;
+
+    return {
+      nctId,
+      title,
+      url: `https://clinicaltrials.gov/study/${nctId}`,
+      phase,
+      enrollmentCount,
+      overallStatus: statusModule.overallStatus ?? null,
+      conditions,
+      briefSummary,
+      eligibilityCriteria,
+      sex: eligModule.sex ?? null,
+      minAge: eligModule.minimumAge ?? null,
+      maxAge: eligModule.maximumAge ?? null,
+      healthyVolunteers,
+    };
+  });
+}

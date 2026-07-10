@@ -4,8 +4,12 @@ import { getPool } from "@/lib/db";
 import { verifyPassword } from "@/lib/auth/password";
 import { createSession } from "@/lib/auth/session";
 import { ok, fail } from "@/lib/api/response";
+import { checkRateLimit } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
+
+// Throttle brute-force / credential-stuffing: max 5 attempts per IP per 15 minutes.
+const LOGIN_RATE_LIMIT = { max: 5, windowMs: 15 * 60 * 1000 };
 
 const loginSchema = z.object({
   email: z.string().email().max(320),
@@ -14,6 +18,12 @@ const loginSchema = z.object({
 
 export async function POST(req: NextRequest): Promise<Response> {
   try {
+    const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    const rate = checkRateLimit(`login:${ip}`, LOGIN_RATE_LIMIT);
+    if (!rate.allowed) {
+      return fail("Too many login attempts. Please try again later.", 429);
+    }
+
     const json = await req.json().catch(() => null);
     const parsed = loginSchema.safeParse(json);
     if (!parsed.success) {

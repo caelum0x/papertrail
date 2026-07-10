@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="section-stack settings-page">
+    <article class="panel">
+        <div class="panel-header">
+            <div>
+                <h2 class="panel-title">Settings</h2>
+                <p class="panel-subtitle">Configuration is saved to <span class="data-path" id="envVarsPath">env_vars.json</span> and grouped by area below.</p>
+            </div>
+            <div class="inline-actions">
+                <span id="envVarsDirtyBadge" class="badge warning-badge hidden">Unsaved changes</span>
+                <button type="button" class="secondary-button small-button" id="reloadEnvVarsBtn">Reload</button>
+                <button type="button" class="primary-button small-button" id="saveEnvVarsBtn" disabled>Save Changes</button>
+            </div>
+        </div>
+
+        <div id="envVarsStatus" class="status-card info-card hidden"></div>
+
+        <div class="settings-toolbar">
+            <input type="search" id="settingsSearch" class="settings-search" placeholder="Search settings by name or description…" autocomplete="off">
+            <label class="checkbox-row settings-changed-toggle">
+                <input type="checkbox" id="settingsChangedOnly">
+                <span>Only configured</span>
+            </label>
+        </div>
+
+        <div id="processorConfigStatus" class="status-card settings-processor-status"></div>
+
+        <div class="status-card info-card settings-restart-note">
+            <strong>How saved settings take effect.</strong>
+            <span>Most LLM settings (provider, routing, token budgets, timeouts) are picked up by the background processor automatically within a few seconds — the status above shows when it has caught up. A few settings marked <span class="badge warning-badge restart-badge-inline">Restart</span> are read once at startup (rate limits, email, storage paths) and only apply after you restart the processor, e.g. <code>docker compose restart processor</code>.</span>
+        </div>
+    </article>
+
+    <div id="settingsGroups" class="settings-groups"></div>
+
+    <article class="panel" id="settingsEmptyState" style="display:none">
+        <div class="empty-state">
+            <strong>No settings match your search.</strong>
+            <span>Clear the search box or the "Only configured" filter.</span>
+        </div>
+    </article>
+</section>
+{% endblock %}
+
+{% block scripts %}
+    <script src="{{ url_for('static', filename='settings.js') }}"></script>
+{% endblock %}

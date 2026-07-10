@@ -2,11 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { listSources } from "@/lib/queries/sources";
 import { parsePagination } from "@/lib/queries/pagination";
 import { logEvent } from "@/lib/logger";
+import { checkRateLimit } from "@/lib/rateLimit";
+import { fail } from "@/lib/api/response";
 
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
   const start = Date.now();
+  const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+
+  const rate = checkRateLimit(ip);
+  if (!rate.allowed) {
+    logEvent("sources.rate_limited", { ip });
+    return fail("Rate limit reached. Please try again shortly.", 429);
+  }
 
   try {
     const { searchParams } = new URL(req.url);

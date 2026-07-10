@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <main class="auth-panel">
+        <section class="panel">
+            <div class="panel-header">
+                <div>
+                    <h1 class="page-title">Valsci</h1>
+                    <p class="page-subtitle">Enter the access password to continue.</p>
+                </div>
+            </div>
+
+            {% if error %}
+            <div class="status-card error-card">
+                <strong>Login failed</strong>
+                <span>{{ error }}</span>
+            </div>
+            {% endif %}
+
+            <form method="POST" action="{{ url_for('api.login') }}" class="auth-form">
+                <div class="form-row">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" required autocomplete="current-password">
+                </div>
+                <button type="submit" class="primary-button">Login</button>
+            </form>
+        </section>
+    </main>
+{% endblock %}

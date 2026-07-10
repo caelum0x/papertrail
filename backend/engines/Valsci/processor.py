@@ -1,0 +1,1522 @@
+import asyncio
+import os
+import json
+import logging
+from typing import Any, Dict, List, Optional, Tuple
+import shutil
+from app.services.claim_processor import ClaimProcessor
+from app.services.claim_store import ClaimStore
+from app.services.gateway_factory import GatewayFactory
+from semantic_scholar.utils.searcher import S2Searcher
+from app.services.email_service import EmailService
+from app.services.llm.gateway import LLMTask
+from app.services.llm.types import empty_usage, merge_usage, normalize_usage
+from app.services.llm.validators import OutputValidationError, validate_query_list
+from app.services.paper_analyzer import PaperAnalyzer
+from app.services.evidence_scorer import EvidenceScorer
+from app.services import processor_heartbeat
+from app.services.env_config import apply_env_vars_to_runtime, env_file_mtime
+from app.services.stage_execution import normalize_stop_after
+import time
+from app.config import settings
+import os.path
+import aiofiles
+import aiofiles.os as async_os
+import gzip
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+QUEUED_JOBS_DIR = settings.Config.QUEUED_JOBS_DIR
+SAVED_JOBS_DIR = settings.Config.SAVED_JOBS_DIR
+
+
+def terminal_failure_report(explanation, *, queries=None, claim_text=""):
+    """Build a report for a claim that could NOT be evaluated — a processing
+    failure (query generation crashed, token cap hit, etc.), not a verdict.
+
+    Marked with evaluation_failed=True and an unset rating so the UI shows it as
+    "Failed" rather than "No Evidence (0)", which is a legitimate verdict reserved
+    for runs that completed the search and genuinely found no relevant evidence.
+    """
+    return {
+        "relevantPapers": [],
+        "explanation": explanation,
+        "claimRating": None,
+        "evaluation_failed": True,
+        "timing_stats": {},
+        "searchQueries": queries or [],
+        "claim_text": claim_text or "",
+    }
+
+class ValsciProcessor:
+    def __init__(self):
+        self.s2_searcher = S2Searcher()
+        self.paper_analyzer = PaperAnalyzer()
+        self.evidence_scorer = EvidenceScorer()
+        self.claim_processor = ClaimProcessor()
+        self.claim_store = ClaimStore()
+        self.gateway_factory = GatewayFactory()
+        self.ai_service = self.gateway_factory.default_gateway()
+        self.email_service = EmailService()
+
+        # In-memory storage for claims
+        self.claims_in_memory: Dict[Tuple[str, str], Dict] = {}
+
+        # Processing status flags
+        self.claims_query_generation_in_progress = set()
+        self.claims_searching_in_progress = set()
+        self.papers_analyzing_in_progress = set()
+        self.papers_scoring_in_progress = set()
+        self.claims_final_reporting_in_progress = set()
+
+        # Token tracking
+        self.claim_token_usage = {}
+        self.max_tokens_per_claim = settings.Config.RATE_LIMIT_MAX_TOKENS_PER_CLAIM
+        self.request_token_estimates = []
+        self.max_tokens_per_window = settings.Config.RATE_LIMIT_MAX_TOKENS_PER_WINDOW
+        self.max_requests_per_window = settings.Config.RATE_LIMIT_MAX_REQUESTS_PER_WINDOW
+        self.window_size_seconds = settings.Config.RATE_LIMIT_WINDOW_SIZE_SECONDS
+        self.last_token_update_time = time.time()
+        self.model = settings.Config.LLM_EVALUATION_MODEL
+
+        self._active_locks = set()
+
+        # Per-claim retry counters for processor-level circuit breaker
+        self._claim_stage_retries: Dict[Tuple[str, str, str], int] = {}
+        self._paper_stage_retries: Dict[Tuple[str, str, str, str], int] = {}
+        self.max_stage_retries = 2  # Max processor-level retries before giving up
+
+    def _ensure_claim_usage(self, claim_data: Dict) -> None:
+        current = claim_data.get("usage")
+        claim_data["usage"] = normalize_usage(current)
+        usage_by_stage = claim_data.get("usage_by_stage")
+        if not isinstance(usage_by_stage, dict):
+            usage_by_stage = {}
+        claim_data["usage_by_stage"] = usage_by_stage
+
+    def _add_claim_usage(self, claim_data: Dict, stage: str, usage: Dict) -> None:
+        self._ensure_claim_usage(claim_data)
+        claim_data["usage"] = merge_usage(claim_data["usage"], usage)
+        stage_usage = claim_data["usage_by_stage"].get(stage, empty_usage())
+        claim_data["usage_by_stage"][stage] = merge_usage(stage_usage, usage)
+
+    @staticmethod
+    def _ensure_claim_paper_lists(claim_data: Dict) -> None:
+        for key in ["inaccessible_papers", "processed_papers", "non_relevant_papers", "failed_papers"]:
+            if not isinstance(claim_data.get(key), list):
+                claim_data[key] = []
+
+    @staticmethod
+    def _extract_paper_id(paper_record: Dict[str, Any]) -> Optional[str]:
+        if not isinstance(paper_record, dict):
+            return None
+        if paper_record.get("corpusId") is not None:
+            return str(paper_record.get("corpusId"))
+        nested = paper_record.get("paper")
+        if isinstance(nested, dict) and nested.get("corpusId") is not None:
+            return str(nested.get("corpusId"))
+        return None
+
+    def _claim_stage_retry_result(self, batch_id: str, claim_id: str, stage: str) -> Tuple[int, bool]:
+        retry_key = (batch_id, claim_id, stage)
+        retries_used = self._claim_stage_retries.get(retry_key, 0) + 1
+        self._claim_stage_retries[retry_key] = retries_used
+        return retries_used, retries_used > self.max_stage_retries
+
+    def _clear_claim_stage_retry(self, batch_id: str, claim_id: str, stage: str) -> None:
+        self._claim_stage_retries.pop((batch_id, claim_id, stage), None)
+
+    def _paper_stage_retry_result(self, batch_id: str, claim_id: str, paper_id: str, stage: str) -> Tuple[int, bool]:
+        retry_key = (batch_id, claim_id, paper_id, stage)
+        retries_used = self._paper_stage_retries.get(retry_key, 0) + 1
+        self._paper_stage_retries[retry_key] = retries_used
+        return retries_used, retries_used > self.max_stage_retries
+
+    def _clear_paper_stage_retry(self, batch_id: str, claim_id: str, paper_id: Optional[str], stage: str) -> None:
+        if paper_id is None:
+            return
+        self._paper_stage_retries.pop((batch_id, claim_id, paper_id, stage), None)
+
+    def _stage_retry_issue(self, human_stage: str, retries_used: int, retries_exhausted: bool) -> Tuple[str, str]:
+        """Build a (severity, message) for a stage failure that tells the reader
+        what happens next. A failure with retries left is a transient WARN that
+        says it is retrying; an exhausted failure is a terminal ERROR that says it
+        gave up — so a fresh reader can tell recovered-and-retried apart from
+        actually-failed instead of seeing every attempt as a scary red error."""
+        max_attempts = self.max_stage_retries + 1
+        if retries_exhausted:
+            return (
+                "ERROR",
+                f"{human_stage} failed on attempt {retries_used} of {max_attempts} — "
+                f"no retries left, so this stage was given up.",
+            )
+        return (
+            "WARN",
+            f"{human_stage} failed on attempt {retries_used} of {max_attempts} — "
+            f"automatically retrying.",
+        )
+
+    def _clear_claim_retry_state(self, batch_id: str, claim_id: str) -> None:
+        for retry_key in [
+            key for key in self._claim_stage_retries
+            if key[0] == batch_id and key[1] == claim_id
+        ]:
+            self._claim_stage_retries.pop(retry_key, None)
+        for retry_key in [
+            key for key in self._paper_stage_retries
+            if key[0] == batch_id and key[1] == claim_id
+        ]:
+            self._paper_stage_retries.pop(retry_key, None)
+
+    @staticmethod
+    def _paper_status_ids(claim_data: Dict[str, Any]) -> Tuple[set[str], set[str], set[str], set[str]]:
+        processed_ids = {
+            str(paper["paper"]["corpusId"])
+            for paper in claim_data.get("processed_papers", [])
+            if isinstance(paper, dict)
+            and isinstance(paper.get("paper"), dict)
+            and paper["paper"].get("corpusId") is not None
+        }
+        non_relevant_ids = {
+            str(paper["paper"]["corpusId"])
+            for paper in claim_data.get("non_relevant_papers", [])
+            if isinstance(paper, dict)
+            and isinstance(paper.get("paper"), dict)
+            and paper["paper"].get("corpusId") is not None
+        }
+        inaccessible_ids = {
+            str(paper["corpusId"])
+            for paper in claim_data.get("inaccessible_papers", [])
+            if isinstance(paper, dict) and paper.get("corpusId") is not None
+        }
+        failed_ids = {
+            paper_id
+            for paper_id in (
+                ValsciProcessor._extract_paper_id(paper)
+                for paper in claim_data.get("failed_papers", [])
+            )
+            if paper_id is not None
+        }
+        return processed_ids, non_relevant_ids, inaccessible_ids, failed_ids
+
+    def _record_failed_paper(
+        self,
+        claim_data: Dict[str, Any],
+        paper_record: Dict[str, Any],
+        *,
+        stage: str,
+        message: str,
+        error: str,
+    ) -> None:
+        self._ensure_claim_paper_lists(claim_data)
+        paper_id = self._extract_paper_id(paper_record)
+        payload = paper_record.get("paper") if isinstance(paper_record.get("paper"), dict) else dict(paper_record)
+
+        for existing in claim_data["failed_papers"]:
+            if self._extract_paper_id(existing) == paper_id and existing.get("stage") == stage:
+                existing.update(
+                    {
+                        "paper": payload,
+                        "paper_id": paper_id,
+                        "stage": stage,
+                        "message": message,
+                        "error": error,
+                    }
+                )
+                return
+
+        claim_data["failed_papers"].append(
+            {
+                "paper": payload,
+                "paper_id": paper_id,
+                "stage": stage,
+                "message": message,
+                "error": error,
+            }
+        )
+
+    @staticmethod
+    def _get_model_override(claim_data: Dict, task: str):
+        overrides = claim_data.get("model_overrides")
+        if isinstance(overrides, dict):
+            return overrides.get(task)
+        return None
+
+    def _get_ai_service(self, claim_data: Optional[Dict]) -> Any:
+        snapshot = {}
+        if isinstance(claim_data, dict):
+            snapshot = claim_data.get("provider_snapshot") or {}
+        return self.gateway_factory.get_gateway(snapshot)
+
+    @staticmethod
+    def _stop_after_stage(claim_data: Optional[Dict[str, Any]]) -> str:
+        if not isinstance(claim_data, dict):
+            return "final_report"
+        return normalize_stop_after(claim_data.get("stop_after"))
+
+    async def _finalize_stage_checkpoint(
+        self,
+        claim_data: Dict[str, Any],
+        batch_id: str,
+        claim_id: str,
+        completed_stage: str,
+    ) -> None:
+        claim_data["status"] = "processed"
+        claim_data["completed_stage"] = completed_stage
+        claim_data["is_stage_checkpoint"] = completed_stage != "final_report"
+        if completed_stage != "final_report":
+            claim_data["report"] = None
+        await self._save_processed_claim(claim_data, batch_id, claim_id)
+
+    async def _attach_report_debug(self, batch_id: str, claim_id: str, claim_data: Dict, report: Dict) -> Dict:
+        self._ensure_claim_usage(claim_data)
+        ai_service = self._get_ai_service(claim_data)
+        issues = await ai_service.get_claim_issues(batch_id, claim_id)
+        debug_trace = await ai_service.build_debug_trace(batch_id, claim_id)
+
+        usage_summary = normalize_usage(claim_data.get("usage"))
+        report["issues"] = issues
+        report["debug_trace"] = debug_trace
+        report["usage_summary"] = usage_summary
+        report["usage_by_stage"] = claim_data.get("usage_by_stage", {})
+        report["usage_stats"] = usage_summary
+        return report
+
+    async def _add_tokens_for_claim(self, claim_id: str, tokens: float, batch_id: str):
+        """Track token usage for a claim and handle over-limit cases."""
+        current_usage = self.claim_token_usage.get(claim_id, 0)
+        new_usage = current_usage + tokens
+        self.claim_token_usage[claim_id] = new_usage
+
+        if new_usage > self.max_tokens_per_claim:
+            logger.warning(f"Claim {claim_id} exceeded token cap of {self.max_tokens_per_claim}. Marking as processed.")
+            claim_data = self.claims_in_memory.get((batch_id, claim_id))
+            if claim_data:
+                ai_service = self._get_ai_service(claim_data)
+                await ai_service.add_issue(
+                    batch_id=batch_id,
+                    claim_id=claim_id,
+                    severity="ERROR",
+                    stage="system",
+                    message="Claim processing stopped: token usage exceeded configured cap.",
+                    details={"max_tokens_per_claim": self.max_tokens_per_claim, "claim_tokens": new_usage},
+                )
+                claim_data['status'] = 'processed'
+                report = terminal_failure_report(
+                    "Stopped: token usage exceeded our cap.",
+                    queries=claim_data.get('semantic_scholar_queries', []),
+                    claim_text=claim_data.get('text', ''),
+                )
+                claim_data['report'] = await self._attach_report_debug(batch_id, claim_id, claim_data, report)
+                await self._save_processed_claim(claim_data, batch_id, claim_id)
+
+    async def _save_processed_claim(self, claim_data: Dict, batch_id: str, claim_id: str):
+        """Save a processed claim to disk and handle cleanup."""
+        self._clear_claim_retry_state(batch_id, claim_id)
+
+        # Create saved jobs directory
+        saved_batch_dir = os.path.join(SAVED_JOBS_DIR, batch_id)
+        os.makedirs(saved_batch_dir, exist_ok=True)
+        
+        # Save to saved_jobs directory
+        saved_file_path = os.path.join(saved_batch_dir, f"{claim_id}.txt")
+        async with aiofiles.open(saved_file_path, 'w') as f:
+            await f.write(json.dumps(claim_data, indent=2))
+
+        if settings.Config.TRACE_COMPRESS_ON_COMPLETE:
+            await self._compress_trace_files(batch_id, claim_id, claim_data)
+
+        self.claim_store.ingest_transport_artifact(batch_id, claim_id)
+        
+        # Remove the original file from queued_jobs
+        queued_file_path = os.path.join(QUEUED_JOBS_DIR, batch_id, f"{claim_id}.txt")
+        if await async_os.path.exists(queued_file_path):
+            await async_os.remove(queued_file_path)
+        
+        # Remove from memory
+        self.claims_in_memory.pop((batch_id, claim_id), None)
+
+        await self._seed_waiting_reuse_runs(batch_id, claim_id, claim_data)
+
+        # Check if batch is complete
+        await self._check_batch_completion(batch_id)
+
+    async def _compress_trace_files(self, batch_id: str, claim_id: str, claim_data: Optional[Dict] = None) -> None:
+        ai_service = self._get_ai_service(claim_data)
+        files = [
+            ai_service.get_trace_file_path(batch_id, claim_id),
+            ai_service.get_issues_file_path(batch_id, claim_id),
+        ]
+        for file_path in files:
+            if not os.path.exists(file_path):
+                continue
+            gz_path = file_path + ".gz"
+            if os.path.exists(gz_path):
+                continue
+            try:
+                with open(file_path, "rb") as src, gzip.open(gz_path, "wb") as dst:
+                    shutil.copyfileobj(src, dst)
+            except Exception as exc:
+                logger.warning(f"Could not compress trace file {file_path}: {exc}")
+
+    async def _check_batch_completion(self, batch_id: str):
+        """Check if all claims in a batch are processed and handle notifications."""
+        batch_claims = [(b, c) for (b, c) in self.claims_in_memory.keys() if b == batch_id]
+        if not batch_claims:
+            batch_dir = os.path.join(QUEUED_JOBS_DIR, batch_id)
+            pending_claim_files = []
+            if await async_os.path.exists(batch_dir):
+                pending_claim_files = [
+                    name
+                    for name in os.listdir(batch_dir)
+                    if name.endswith('.txt') and name != 'claims.txt'
+                ]
+            if pending_claim_files:
+                return
+
+            notification_file = os.path.join(batch_dir, 'notification.json')
+            if await async_os.path.exists(notification_file):
+                async with aiofiles.open(notification_file, 'r') as f:
+                    notification_data = json.loads(await f.read())
+                if notification_data.get('email'):
+                    self.email_service.send_batch_completion_notification(
+                        notification_data['email'],
+                        batch_id,
+                        notification_data.get('num_claims', 0),
+                        notification_data.get('review_type', 'standard')
+                    )
+            if await async_os.path.exists(batch_dir):
+                await self.async_rmtree(batch_dir)
+
+    @staticmethod
+    def _prepare_waiting_reuse_claim_data(
+        baseline_claim_data: Dict[str, Any],
+    ) -> Tuple[str, Dict[str, Any]]:
+        if baseline_claim_data.get("raw_papers"):
+            next_status = "ready_for_analysis"
+        elif baseline_claim_data.get("semantic_scholar_queries"):
+            next_status = "ready_for_search"
+        else:
+            next_status = "queued"
+
+        seeded_claim_data = json.loads(json.dumps(baseline_claim_data))
+        seeded_claim_data["processed_papers"] = []
+        seeded_claim_data["non_relevant_papers"] = []
+        seeded_claim_data["report"] = None
+        seeded_claim_data["usage"] = empty_usage()
+        seeded_claim_data["usage_by_stage"] = {}
+        seeded_claim_data["status"] = next_status
+        seeded_claim_data["completed_stage"] = None
+        seeded_claim_data["is_stage_checkpoint"] = False
+        return next_status, seeded_claim_data
+
+    def _materialize_waiting_reuse_run(
+        self,
+        waiting_run: Dict[str, Any],
+        baseline_claim_data: Dict[str, Any],
+    ) -> str:
+        next_status, seeded_claim_data = self._prepare_waiting_reuse_claim_data(baseline_claim_data)
+        waiting_run = dict(waiting_run)
+        waiting_run["status"] = next_status
+        self.claim_store.save_run(waiting_run)
+        self.claim_store.materialize_run_to_queue(
+            waiting_run,
+            status=next_status,
+            seeded_claim_data=seeded_claim_data,
+        )
+        return next_status
+
+    def _load_saved_claim_data_for_run(self, run_record: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        if not run_record:
+            return None
+        transport = run_record.get("transport") or {}
+        batch_id = transport.get("batch_id")
+        claim_id = transport.get("claim_id")
+        if not batch_id or not claim_id:
+            return None
+
+        saved_file_path = self.claim_store.saved_jobs_dir / batch_id / f"{claim_id}.txt"
+        if not saved_file_path.exists():
+            return None
+
+        try:
+            with saved_file_path.open("r", encoding="utf-8") as handle:
+                claim_data = json.load(handle)
+        except Exception as exc:
+            logger.warning(
+                "Could not read saved baseline artifact for run %s at %s: %s",
+                run_record.get("run_id"),
+                saved_file_path,
+                exc,
+            )
+            return None
+
+        if not isinstance(claim_data, dict):
+            logger.warning(
+                "Saved baseline artifact for run %s did not contain a JSON object.",
+                run_record.get("run_id"),
+            )
+            return None
+        return claim_data
+
+    async def _seed_waiting_reuse_runs(self, batch_id: str, claim_id: str, baseline_claim_data: Dict[str, Any]) -> None:
+        baseline_run = self.claim_store.find_run_by_legacy(batch_id, claim_id)
+        if not baseline_run:
+            return
+        waiting_runs = [
+            run
+            for run in self.claim_store.list_runs_for_claim(baseline_run["claim_key"])
+            if run.get("status") == "waiting_for_baseline"
+            and run.get("reuse_from_run_id") == baseline_run["run_id"]
+        ]
+        if not waiting_runs:
+            return
+
+        for waiting_run in waiting_runs:
+            next_status = self._materialize_waiting_reuse_run(
+                waiting_run,
+                baseline_claim_data,
+            )
+            logger.info(
+                "Seeded waiting reuse run %s from baseline %s with status %s.",
+                waiting_run.get("run_id"),
+                baseline_run.get("run_id"),
+                next_status,
+            )
+
+    def recover_waiting_reuse_runs(self) -> int:
+        waiting_runs = [
+            run
+            for run in self.claim_store.list_runs()
+            if run.get("status") == "waiting_for_baseline" and run.get("reuse_from_run_id")
+        ]
+        if not waiting_runs:
+            return 0
+
+        baseline_cache: Dict[str, Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]] = {}
+        recovered_count = 0
+
+        for waiting_run in waiting_runs:
+            baseline_run_id = waiting_run.get("reuse_from_run_id")
+            if not baseline_run_id:
+                continue
+
+            if baseline_run_id not in baseline_cache:
+                baseline_run = self.claim_store.get_run(baseline_run_id)
+                baseline_claim_data = self._load_saved_claim_data_for_run(baseline_run)
+                baseline_cache[baseline_run_id] = (baseline_run, baseline_claim_data)
+
+            baseline_run, baseline_claim_data = baseline_cache[baseline_run_id]
+            if not baseline_run or not baseline_claim_data:
+                continue
+            if baseline_claim_data.get("status") != "processed":
+                continue
+
+            next_status = self._materialize_waiting_reuse_run(waiting_run, baseline_claim_data)
+            recovered_count += 1
+            logger.info(
+                "Recovered waiting reuse run %s from saved baseline %s with status %s.",
+                waiting_run.get("run_id"),
+                baseline_run_id,
+                next_status,
+            )
+
+        return recovered_count
+
+    def calculate_tokens_in_window(self):
+        """Calculate token usage within the current window."""
+        current_time = time.time()
+        self.request_token_estimates = [
+            estimate for estimate in self.request_token_estimates 
+            if current_time - estimate['timestamp'] < self.window_size_seconds
+        ]
+        num_requests = len(self.request_token_estimates)
+        return (num_requests, sum(estimate['tokens'] for estimate in self.request_token_estimates))
+
+    async def generate_search_queries(self, claim_data, batch_id: str, claim_id: str) -> None:
+        """Generate search queries for a claim."""
+        ai_service = self._get_ai_service(claim_data)
+        try:
+            self._ensure_claim_usage(claim_data)
+            # Token tracking
+            estimated_tokens = 1000 + (len(claim_data['text']) / 3.5)
+            self.request_token_estimates.append({'tokens': estimated_tokens, 'timestamp': time.time()})
+            await self._add_tokens_for_claim(claim_id, estimated_tokens, batch_id)
+
+            # Check token cap
+            if claim_id in self.claim_token_usage and self.claim_token_usage[claim_id] > self.max_tokens_per_claim:
+                return
+
+            # Generate queries
+            queries, usage = await self.s2_searcher.generate_search_queries(
+                claim_data['text'],
+                claim_data['search_config']['num_queries'],
+                ai_service=ai_service,
+                batch_id=batch_id,
+                claim_id=claim_id,
+                model_override=self._get_model_override(claim_data, LLMTask.QUERY_GENERATION),
+            )
+
+            # Update in-memory claim data
+            claim_data = self.claims_in_memory[(batch_id, claim_id)]
+            claim_data['semantic_scholar_queries'] = queries
+            self._add_claim_usage(claim_data, LLMTask.QUERY_GENERATION, usage)
+            claim_data['completed_stage'] = None
+            claim_data['is_stage_checkpoint'] = False
+
+            if not queries:
+                # Query generation returned empty results -- do not advance to search
+                claim_data['status'] = 'processed'
+                await ai_service.add_issue(
+                    batch_id=batch_id,
+                    claim_id=claim_id,
+                    severity="ERROR",
+                    stage=LLMTask.QUERY_GENERATION,
+                    message="Query generation produced zero queries. Skipping paper search.",
+                    details={"claim_text_length": len(claim_data.get('text', ''))},
+                )
+                report = terminal_failure_report(
+                    "Search query generation produced no queries. The claim could not be evaluated.",
+                    claim_text=claim_data.get('text', ''),
+                )
+                claim_data['report'] = await self._attach_report_debug(batch_id, claim_id, claim_data, report)
+                await self._save_processed_claim(claim_data, batch_id, claim_id)
+                self._clear_claim_stage_retry(batch_id, claim_id, LLMTask.QUERY_GENERATION)
+                return
+
+            if self._stop_after_stage(claim_data) == LLMTask.QUERY_GENERATION:
+                await self._finalize_stage_checkpoint(
+                    claim_data,
+                    batch_id,
+                    claim_id,
+                    LLMTask.QUERY_GENERATION,
+                )
+                self._clear_claim_stage_retry(batch_id, claim_id, LLMTask.QUERY_GENERATION)
+                return
+
+            claim_data['status'] = 'ready_for_search'
+            self._clear_claim_stage_retry(batch_id, claim_id, LLMTask.QUERY_GENERATION)
+
+        except Exception as e:
+            logger.error(f"Error generating search queries for claim {claim_id}: {str(e)}")
+
+            retries_used, retries_exhausted = self._claim_stage_retry_result(
+                batch_id, claim_id, LLMTask.QUERY_GENERATION
+            )
+
+            severity, message = self._stage_retry_issue("Search query generation", retries_used, retries_exhausted)
+            await ai_service.add_issue(
+                batch_id=batch_id,
+                claim_id=claim_id,
+                severity=severity,
+                stage=LLMTask.QUERY_GENERATION,
+                message=message,
+                details={"exception_type": type(e).__name__, "exception_message": str(e)},
+            )
+
+            if retries_exhausted:
+                # Exhausted processor-level retries -- produce terminal failure report
+                logger.error(f"Claim {claim_id}: query generation failed after {retries_used} processor attempts. Marking as processed.")
+                claim_data = self.claims_in_memory.get((batch_id, claim_id), claim_data)
+                claim_data['status'] = 'processed'
+                report = terminal_failure_report(
+                    f"Search query generation failed after all retries: {str(e)}",
+                    claim_text=claim_data.get('text', ''),
+                )
+                claim_data['report'] = await self._attach_report_debug(batch_id, claim_id, claim_data, report)
+                await self._save_processed_claim(claim_data, batch_id, claim_id)
+                self._clear_claim_stage_retry(batch_id, claim_id, LLMTask.QUERY_GENERATION)
+            # else: claim stays 'queued' and will be retried on next loop iteration
+
+        finally:
+            self.claims_query_generation_in_progress.discard(claim_id)
+
+    async def search_papers(self, claim_data, batch_id: str, claim_id: str) -> None:
+        """Search for papers relevant to the claim."""
+        ai_service = self._get_ai_service(claim_data)
+        try:
+            # Token tracking
+            estimated_tokens = 100  # Small overhead for query processing
+            self.request_token_estimates.append({'tokens': estimated_tokens, 'timestamp': time.time()})
+            await self._add_tokens_for_claim(claim_id, estimated_tokens, batch_id)
+
+            # Check token cap
+            if claim_id in self.claim_token_usage and self.claim_token_usage[claim_id] > self.max_tokens_per_claim:
+                return
+
+            # Get in-memory claim data
+            claim_data = self.claims_in_memory[(batch_id, claim_id)]
+            raw_queries = claim_data['semantic_scholar_queries']
+
+            try:
+                queries = validate_query_list(raw_queries, min_count=1)
+            except OutputValidationError as exc:
+                await ai_service.add_issue(
+                    batch_id=batch_id,
+                    claim_id=claim_id,
+                    severity="ERROR",
+                    stage="paper_search",
+                    message="Paper search blocked: query list failed validation.",
+                    details={"error": str(exc)},
+                )
+                claim_data['status'] = 'processed'
+                report = terminal_failure_report(
+                    "Query validation failed before paper search. The claim could not be evaluated.",
+                    claim_text=claim_data.get('text', ''),
+                )
+                claim_data['report'] = await self._attach_report_debug(batch_id, claim_id, claim_data, report)
+                await self._save_processed_claim(claim_data, batch_id, claim_id)
+                self._clear_claim_stage_retry(batch_id, claim_id, "paper_search")
+                return
+
+            if queries != raw_queries:
+                await ai_service.add_issue(
+                    batch_id=batch_id,
+                    claim_id=claim_id,
+                    severity="WARN",
+                    stage="paper_search",
+                    message="Query list was sanitized before search execution.",
+                    details={
+                        "original_count": len(raw_queries) if isinstance(raw_queries, list) else 0,
+                        "sanitized_count": len(queries),
+                    },
+                )
+                claim_data['semantic_scholar_queries'] = queries
+
+            # Guard: refuse to search with empty queries (upstream failure)
+            if not queries:
+                logger.warning(f"search_papers called with empty queries for claim {claim_id}")
+                await ai_service.add_issue(
+                    batch_id=batch_id,
+                    claim_id=claim_id,
+                    severity="ERROR",
+                    stage="paper_search",
+                    message="Paper search invoked with empty query list. Upstream query generation likely failed.",
+                    details={},
+                )
+                claim_data['status'] = 'processed'
+                report = terminal_failure_report(
+                    "No search queries were available. The claim could not be evaluated.",
+                    claim_text=claim_data.get('text', ''),
+                )
+                claim_data['report'] = await self._attach_report_debug(batch_id, claim_id, claim_data, report)
+                await self._save_processed_claim(claim_data, batch_id, claim_id)
+                self._clear_claim_stage_retry(batch_id, claim_id, "paper_search")
+                return
+
+            # Search papers
+            raw_papers = await self.s2_searcher.search_papers_for_claim(
+                queries,
+                results_per_query=claim_data['search_config']['results_per_query'],
+                batch_id=batch_id,
+                claim_id=claim_id,
+            )
+            
+            # Process papers
+            papers = []
+            for raw_paper in raw_papers:
+                try:
+                    if raw_paper.get('fields_of_study') is None:
+                        raw_paper['fields_of_study'] = []
+                    papers.append(raw_paper)
+                except Exception as e:
+                    logger.error(f"Error converting paper {raw_paper.get('corpusId')}: {str(e)}")
+                    continue
+            
+            # Sort by citation count
+            papers.sort(key=lambda p: p.get('citationCount', 0), reverse=True)
+
+            # Update claim data in memory
+            if not papers:
+                claim_data['status'] = 'processed'
+                await ai_service.add_issue(
+                    batch_id=batch_id,
+                    claim_id=claim_id,
+                    severity="WARN",
+                    stage="paper_search",
+                    message="No papers found for generated search queries.",
+                    details={"queries": queries},
+                )
+                report = {
+                    "relevantPapers": [],
+                    "explanation": "No relevant papers were found for this claim.",
+                    "claimRating": 0,
+                    "timing_stats": {},
+                    "searchQueries": queries,
+                    "claim_text": claim_data['text']
+                }
+                claim_data['report'] = await self._attach_report_debug(batch_id, claim_id, claim_data, report)
+                # Save final state since we're done
+                await self._save_processed_claim(claim_data, batch_id, claim_id)
+                self._clear_claim_stage_retry(batch_id, claim_id, "paper_search")
+            else:
+                claim_data['raw_papers'] = papers
+                claim_data['status'] = 'ready_for_analysis'
+                self._clear_claim_stage_retry(batch_id, claim_id, "paper_search")
+
+        except Exception as e:
+            logger.error(f"Error searching for papers for claim {claim_id}: {str(e)}")
+            retries_used, retries_exhausted = self._claim_stage_retry_result(
+                batch_id, claim_id, "paper_search"
+            )
+            severity, message = self._stage_retry_issue("Paper search", retries_used, retries_exhausted)
+            await ai_service.add_issue(
+                batch_id=batch_id,
+                claim_id=claim_id,
+                severity=severity,
+                stage="paper_search",
+                message=message,
+                details={"exception_type": type(e).__name__, "exception_message": str(e)},
+            )
+            if retries_exhausted:
+                claim_data = self.claims_in_memory.get((batch_id, claim_id), claim_data)
+                claim_data['status'] = 'processed'
+                report = terminal_failure_report(
+                    f"Paper search failed after all retries: {str(e)}",
+                    queries=claim_data.get('semantic_scholar_queries', []),
+                    claim_text=claim_data.get('text', ''),
+                )
+                claim_data['report'] = await self._attach_report_debug(batch_id, claim_id, claim_data, report)
+                await self._save_processed_claim(claim_data, batch_id, claim_id)
+                self._clear_claim_stage_retry(batch_id, claim_id, "paper_search")
+        finally:
+            self.claims_searching_in_progress.discard(claim_id)
+
+    def _log_lock(self, action: str, lock_path: str, context: str):
+        """Helper to standardize lock logging with context"""
+        current_time = time.time()
+        if action == "creating":
+            self._lock_start_times = getattr(self, '_lock_start_times', {})
+            self._lock_start_times[lock_path] = current_time
+        elif action == "released":
+            start_time = self._lock_start_times.get(lock_path)
+            if start_time:
+                duration = current_time - start_time
+                if duration > 1.0:  # Log warning for locks held more than 1 second
+                    logger.warning(f"Lock held for {duration:.2f}s: {lock_path} ({context})")
+                del self._lock_start_times[lock_path]
+        print(f"Lock {action}: {lock_path} ({context})")
+
+    async def analyze_claim(self, claim_data, batch_id: str, claim_id: str) -> None:
+        """Analyze the claim."""
+        ai_service = self._get_ai_service(claim_data)
+        # Check for token limit exceeded at the beginning
+        if claim_id in self.claim_token_usage and self.claim_token_usage[claim_id] > self.max_tokens_per_claim:
+            logger.warning(f"Claim {claim_id} has exceeded token limit in analyze_claim. Marking as processed.")
+            await ai_service.add_issue(
+                batch_id=batch_id,
+                claim_id=claim_id,
+                severity="ERROR",
+                stage="system",
+                message="Claim processing stopped: token usage exceeded configured cap.",
+                details={
+                    "max_tokens_per_claim": self.max_tokens_per_claim,
+                    "claim_tokens": self.claim_token_usage.get(claim_id, 0),
+                },
+            )
+            claim_data['status'] = 'processed'
+            report = terminal_failure_report(
+                "Stopped: token usage exceeded our cap.",
+                queries=claim_data.get('semantic_scholar_queries', []),
+                claim_text=claim_data.get('text', ''),
+            )
+            claim_data['report'] = await self._attach_report_debug(batch_id, claim_id, claim_data, report)
+            await self._save_processed_claim(claim_data, batch_id, claim_id)
+            return
+            
+        self._ensure_claim_paper_lists(claim_data)
+        claim_data["completed_stage"] = None
+        claim_data["is_stage_checkpoint"] = False
+        processed_ids, non_relevant_ids, inaccessible_ids, failed_ids = self._paper_status_ids(claim_data)
+
+        # Analyze raw papers
+        for raw_paper in claim_data.get('raw_papers', []):
+            try:
+                await asyncio.sleep(0.1)
+                raw_corpus_id = raw_paper.get('corpusId')
+                if not raw_corpus_id:
+                    logger.warning(f"Raw paper missing corpus ID: {raw_paper}")
+                    continue
+                corpus_id = str(raw_corpus_id)
+
+                if (corpus_id not in processed_ids and 
+                    corpus_id not in non_relevant_ids and 
+                    corpus_id not in inaccessible_ids and
+                    corpus_id not in failed_ids):
+                    
+                    # Get paper content
+                    content_dict = self.s2_searcher.get_paper_content(raw_corpus_id)
+
+                    if content_dict is None or content_dict.get('text') is None:
+                        inaccessible_paper = dict(raw_paper)
+                        inaccessible_paper['access_status'] = (
+                            content_dict.get('status', 'inaccessible')
+                            if isinstance(content_dict, dict)
+                            else 'inaccessible'
+                        )
+                        inaccessible_paper['access_reason_code'] = (
+                            content_dict.get('reason_code', 'unknown')
+                            if isinstance(content_dict, dict)
+                            else 'unknown'
+                        )
+                        inaccessible_paper['access_reason'] = (
+                            content_dict.get('reason', 'Paper content not accessible')
+                            if isinstance(content_dict, dict)
+                            else 'Paper content not accessible'
+                        )
+                        inaccessible_paper['access_details'] = (
+                            content_dict.get('lookup_details', {})
+                            if isinstance(content_dict, dict)
+                            else {}
+                        )
+
+                        # Add to inaccessible papers
+                        claim_data['inaccessible_papers'].append(inaccessible_paper)
+                        await ai_service.add_issue(
+                            batch_id=batch_id,
+                            claim_id=claim_id,
+                            severity="WARN",
+                            stage="paper_fetch",
+                            message="Paper content was not accessible.",
+                            details={
+                                "paper_id": str(corpus_id),
+                                "reason_code": inaccessible_paper['access_reason_code'],
+                                "reason": inaccessible_paper['access_reason'],
+                                "lookup_details": inaccessible_paper['access_details'],
+                            },
+                        )
+                        continue
+
+                    raw_paper['content'] = content_dict['text']
+                    raw_paper['content_type'] = content_dict['source']
+
+                    estimated_tokens_for_analysis = 1000 + (len(content_dict['text']) / 3.5)
+                    current_num_requests, current_num_tokens = self.calculate_tokens_in_window()
+                    
+                    if (estimated_tokens_for_analysis + current_num_tokens < self.max_tokens_per_window and 
+                        current_num_requests < self.max_requests_per_window and
+                        raw_corpus_id not in self.papers_analyzing_in_progress and
+                        corpus_id not in processed_ids and
+                        corpus_id not in non_relevant_ids):
+                        self.request_token_estimates.append({
+                            'tokens': estimated_tokens_for_analysis, 
+                            'timestamp': time.time()
+                        })
+                        asyncio.create_task(self.analyze_single_paper(raw_paper, claim_data['text'], batch_id, claim_id))
+                    else:
+                        return
+
+            except Exception as e:
+                logger.error(f"Error processing raw paper: {e}")
+                continue
+
+        processed_ids, non_relevant_ids, inaccessible_ids, failed_ids = self._paper_status_ids(claim_data)
+        all_papers_processed = all(
+            str(paper['corpusId']) in processed_ids or
+            str(paper['corpusId']) in non_relevant_ids or
+            str(paper['corpusId']) in inaccessible_ids or
+            str(paper['corpusId']) in failed_ids
+            for paper in claim_data.get('raw_papers', [])
+            if paper.get('corpusId')
+        )
+        if self._stop_after_stage(claim_data) == LLMTask.PAPER_ANALYSIS and all_papers_processed:
+            await self._finalize_stage_checkpoint(
+                claim_data,
+                batch_id,
+                claim_id,
+                LLMTask.PAPER_ANALYSIS,
+            )
+            return
+
+        # Score papers that need scoring
+        for paper in claim_data['processed_papers']:
+            if paper['score'] == -1:
+                print(f"Score is -1 for paper {paper['paper']['corpusId']} in claim {claim_id}")
+                estimated_tokens_for_scoring = 500
+                current_num_requests, current_num_tokens = self.calculate_tokens_in_window()
+                
+                if (estimated_tokens_for_scoring + current_num_tokens < self.max_tokens_per_window and 
+                    current_num_requests < self.max_requests_per_window and
+                    paper['paper']['corpusId'] not in self.papers_scoring_in_progress):
+                    self.papers_scoring_in_progress.add(paper['paper']['corpusId'])
+                    self.request_token_estimates.append({'tokens': estimated_tokens_for_scoring, 'timestamp': time.time()})
+                    print(f"Scoring paper {paper['paper']['corpusId']} in claim {claim_id}")
+                    await asyncio.sleep(0.1)
+                    asyncio.create_task(self.score_paper(paper, batch_id, claim_id))
+                else:
+                    return
+
+        # Check completion status
+        processed_ids, non_relevant_ids, inaccessible_ids, failed_ids = self._paper_status_ids(claim_data)
+        all_papers_scored = all(paper.get('score', -1) != -1 for paper in claim_data.get('processed_papers', []))
+        all_papers_processed = all(
+            str(paper['corpusId']) in processed_ids or 
+            str(paper['corpusId']) in non_relevant_ids or 
+            str(paper['corpusId']) in inaccessible_ids or
+            str(paper['corpusId']) in failed_ids
+            for paper in claim_data.get('raw_papers', []) 
+            if paper.get('corpusId')
+        )
+
+        if all_papers_scored and all_papers_processed:
+            print(f"All papers scored and processed for claim {claim_id}")
+            if self._stop_after_stage(claim_data) == LLMTask.VENUE_SCORING:
+                await self._finalize_stage_checkpoint(
+                    claim_data,
+                    batch_id,
+                    claim_id,
+                    LLMTask.VENUE_SCORING,
+                )
+                return
+            if claim_id not in self.claims_final_reporting_in_progress:
+                try:
+                    print(f"Checking status for final report for claim {claim_id}")
+                    estimated_tokens_for_final_report = 2000 + (
+                        sum(len(excerpt) for paper in claim_data.get('processed_papers', [])
+                            for excerpt in paper.get('excerpts', []) if isinstance(excerpt, str)) +
+                        sum(len(explanation) for paper in claim_data.get('processed_papers', [])
+                            for explanation in paper.get('explanations', []) if isinstance(explanation, str))
+                    ) / 3.5
+
+                    if estimated_tokens_for_final_report > self.max_tokens_per_window:
+                        # clamp the estimated tokens to the max tokens per window minus 1000
+                        estimated_tokens_for_final_report = self.max_tokens_per_window - 1000
+                    
+                    current_num_requests, current_num_tokens = self.calculate_tokens_in_window()
+                    if (estimated_tokens_for_final_report + current_num_tokens < self.max_tokens_per_window and 
+                        current_num_requests < self.max_requests_per_window):
+                        self.request_token_estimates.append({'tokens': estimated_tokens_for_final_report, 'timestamp': time.time()})
+                        self.claims_final_reporting_in_progress.add(claim_id)
+                        print(f"Generating final report for claim {claim_id}")
+                        asyncio.create_task(self.generate_final_report(batch_id, claim_id))
+                    else:
+                        print(f"Current window is full. Claim {claim_id} does not have enough tokens for final report generation right now")
+                        return
+                except Exception as e:
+                    logger.error(f"Error preparing final report: {e}")
+                    return
+            else:
+                print(f"Claim {claim_id} final report already in progress")
+                return
+        else:
+            print(f"Claim {claim_id} is not fully processed, breaking the loop")
+            return
+    
+    async def _write_claim_data(self, claim_data, batch_id, claim_id):
+        """Internal method to write claim data asynchronously."""
+        file_path = os.path.join(QUEUED_JOBS_DIR, batch_id, f"{claim_id}.txt")
+        try:
+            logger.warning(
+                f"[_write_claim_data] Writing claim data to {file_path}.\n"
+                f"processed_papers scores: {[p['score'] for p in claim_data.get('processed_papers', [])]}"
+            )
+            async with aiofiles.open(file_path, 'w') as f:
+                await f.write(json.dumps(claim_data, indent=2))
+            logger.warning(
+                f"[_write_claim_data] Finished writing claim data to {file_path}.\n"
+                f"processed_papers scores: {[p['score'] for p in claim_data.get('processed_papers', [])]}"
+            )
+        except Exception as e:
+            logger.error(f"Error writing claim data to {file_path}: {str(e)}")
+            raise
+
+    async def analyze_single_paper(self, raw_paper, claim_text, batch_id: str, claim_id: str) -> None:
+        """Analyze a single paper."""
+        ai_service = self.ai_service
+        paper_id = str(raw_paper.get('corpusId'))
+        try:
+            self.papers_analyzing_in_progress.add(raw_paper['corpusId'])
+            claim_data = self.claims_in_memory[(batch_id, claim_id)]
+            self._ensure_claim_usage(claim_data)
+            self._ensure_claim_paper_lists(claim_data)
+            ai_service = self._get_ai_service(claim_data)
+            
+            # Estimate tokens before analysis
+            estimated_tokens_for_analysis = 1000 + (len(raw_paper['content']) / 3.5)
+            await self._add_tokens_for_claim(claim_id, estimated_tokens_for_analysis, batch_id)
+
+            # Check if we exceeded the token cap
+            if claim_id in self.claim_token_usage and self.claim_token_usage[claim_id] > self.max_tokens_per_claim:
+                return
+
+            relevance, excerpts, explanations, non_relevant_explanation, excerpt_pages, usage = (
+                await self.paper_analyzer.analyze_relevance_and_extract(
+                    raw_paper['content'], 
+                    claim_text, 
+                    ai_service=ai_service,
+                    batch_id=batch_id,
+                    claim_id=claim_id,
+                    paper_id=str(raw_paper.get('corpusId')),
+                    model_override=self._get_model_override(
+                        self.claims_in_memory[(batch_id, claim_id)],
+                        LLMTask.PAPER_ANALYSIS
+                    ),
+                )
+            )
+
+            print(f"Analyzed paper {raw_paper['corpusId']}")
+
+            # Get claim data from memory
+            claim_data = self.claims_in_memory[(batch_id, claim_id)]
+            self._ensure_claim_paper_lists(claim_data)
+            
+            # Check for duplicates in processed_papers before adding
+            processed_corpus_ids = {
+                str(p['paper']['corpusId'])
+                for p in claim_data.get('processed_papers', [])
+                if isinstance(p.get('paper'), dict) and p['paper'].get('corpusId') is not None
+            }
+            
+            # Update claim data
+            if relevance >= 0.1:
+                if paper_id not in processed_corpus_ids:
+                    claim_data['processed_papers'].append({
+                        'paper': raw_paper,
+                        'relevance': relevance,
+                        'excerpts': excerpts,
+                        'score': -1,
+                        'score_status': 'pending',
+                        'explanations': explanations,
+                        'content_type': raw_paper['content_type'],
+                        'excerpt_pages': excerpt_pages
+                    })
+                    # Add usage to claim data
+                    self._add_claim_usage(claim_data, LLMTask.PAPER_ANALYSIS, usage)
+                    self._clear_paper_stage_retry(batch_id, claim_id, paper_id, LLMTask.PAPER_ANALYSIS)
+                else:
+                    logger.warning(f"Skipping duplicate paper {raw_paper['corpusId']} for claim {claim_id}")
+            else:
+                # Check for duplicates in non_relevant_papers
+                non_relevant_corpus_ids = {
+                    str(p['paper']['corpusId'])
+                    for p in claim_data.get('non_relevant_papers', [])
+                    if isinstance(p.get('paper'), dict) and p['paper'].get('corpusId') is not None
+                }
+                if paper_id not in non_relevant_corpus_ids:
+                    claim_data['non_relevant_papers'].append({
+                        'paper': raw_paper,
+                        'explanation': non_relevant_explanation,
+                        'content_type': raw_paper['content_type']
+                    })
+
+                # Add usage to claim data
+                self._add_claim_usage(claim_data, LLMTask.PAPER_ANALYSIS, usage)
+                self._clear_paper_stage_retry(batch_id, claim_id, paper_id, LLMTask.PAPER_ANALYSIS)
+
+        except Exception as e:
+            logger.error(f"Error analyzing paper {raw_paper['corpusId']}: {str(e)}")
+            retries_used, retries_exhausted = self._paper_stage_retry_result(
+                batch_id, claim_id, paper_id, LLMTask.PAPER_ANALYSIS
+            )
+            severity, message = self._stage_retry_issue("Paper analysis", retries_used, retries_exhausted)
+            await ai_service.add_issue(
+                batch_id=batch_id,
+                claim_id=claim_id,
+                severity=severity,
+                stage=LLMTask.PAPER_ANALYSIS,
+                message=message,
+                details={"paper_id": paper_id, "exception_type": type(e).__name__, "exception_message": str(e)},
+            )
+            if retries_exhausted:
+                claim_data = self.claims_in_memory.get((batch_id, claim_id))
+                if claim_data:
+                    self._record_failed_paper(
+                        claim_data,
+                        raw_paper,
+                        stage=LLMTask.PAPER_ANALYSIS,
+                        message="Paper analysis failed after all retries.",
+                        error=str(e),
+                    )
+                self._clear_paper_stage_retry(batch_id, claim_id, paper_id, LLMTask.PAPER_ANALYSIS)
+        finally:
+            self.papers_analyzing_in_progress.discard(raw_paper['corpusId'])
+
+    async def score_paper(self, processed_paper, batch_id: str, claim_id: str) -> None:
+        """Score a single paper."""
+        ai_service = self.ai_service
+        paper_id = str(processed_paper.get('paper', {}).get('corpusId'))
+        try:
+            estimated_tokens_for_scoring = 500
+            await self._add_tokens_for_claim(claim_id, estimated_tokens_for_scoring, batch_id)
+
+            # Check token cap
+            if claim_id in self.claim_token_usage and self.claim_token_usage[claim_id] > self.max_tokens_per_claim:
+                return
+
+            # Get claim data to access bibliometric config
+            claim_data = self.claims_in_memory[(batch_id, claim_id)]
+            self._ensure_claim_usage(claim_data)
+            self._ensure_claim_paper_lists(claim_data)
+            ai_service = self._get_ai_service(claim_data)
+            
+            # Get bibliometric configuration
+            bibliometric_config = claim_data.get('bibliometric_config', None)
+
+            score, usage = await self.evidence_scorer.calculate_paper_weight(
+                processed_paper, 
+                ai_service=ai_service,
+                bibliometric_config=bibliometric_config,
+                batch_id=batch_id,
+                claim_id=claim_id,
+                paper_id=paper_id,
+                model_override=self._get_model_override(claim_data, LLMTask.VENUE_SCORING),
+            )
+
+            print(f"Claim {claim_id} token usage as of scoring: {self.claim_token_usage[claim_id]}")
+
+            # Get claim data from memory
+            claim_data = self.claims_in_memory[(batch_id, claim_id)]
+
+            # Update score
+            for paper in claim_data['processed_papers']:
+                if str(paper['paper']['corpusId']) == paper_id:
+                    print(f"Found paper to set score for: {paper_id}")
+                    paper['score'] = score
+                    paper['score_status'] = 'completed'
+                    paper.pop('score_error', None)
+                    break
+
+            # Add usage to claim data
+            self._add_claim_usage(claim_data, LLMTask.VENUE_SCORING, usage)
+            self._clear_paper_stage_retry(batch_id, claim_id, paper_id, LLMTask.VENUE_SCORING)
+
+        except Exception as e:
+            logger.error(f"Error scoring paper: {str(e)}")
+            retries_used, retries_exhausted = self._paper_stage_retry_result(
+                batch_id, claim_id, paper_id, LLMTask.VENUE_SCORING
+            )
+            severity, message = self._stage_retry_issue("Evidence scoring", retries_used, retries_exhausted)
+            await ai_service.add_issue(
+                batch_id=batch_id,
+                claim_id=claim_id,
+                severity=severity,
+                stage=LLMTask.VENUE_SCORING,
+                message=message,
+                details={"paper_id": paper_id, "exception_type": type(e).__name__, "exception_message": str(e)},
+            )
+            if retries_exhausted:
+                claim_data = self.claims_in_memory.get((batch_id, claim_id))
+                if claim_data:
+                    self._ensure_claim_paper_lists(claim_data)
+                    for paper in claim_data.get('processed_papers', []):
+                        if str(paper.get('paper', {}).get('corpusId')) == paper_id:
+                            paper['score'] = 0.0
+                            paper['score_status'] = 'failed'
+                            paper['score_error'] = str(e)
+                            break
+                    self._record_failed_paper(
+                        claim_data,
+                        processed_paper,
+                        stage=LLMTask.VENUE_SCORING,
+                        message="Evidence scoring failed after all retries.",
+                        error=str(e),
+                    )
+                self._clear_paper_stage_retry(batch_id, claim_id, paper_id, LLMTask.VENUE_SCORING)
+        finally:
+            if processed_paper.get('paper', {}).get('corpusId') is not None:
+                self.papers_scoring_in_progress.discard(processed_paper['paper']['corpusId'])
+
+    async def generate_final_report(self, batch_id: str, claim_id: str) -> None:
+        """Generate the final report."""
+        ai_service = self.ai_service
+        try:
+            # Get claim data from memory. If it's gone, the claim already finished
+            # and was evicted (a redundant/late final-report dispatch after the
+            # report was saved) — skip quietly. Reporting this as a failure logged
+            # a scary ERROR for work that actually succeeded, with an opaque
+            # KeyError message that was just the (batch_id, claim_id) tuple.
+            claim_data = self.claims_in_memory.get((batch_id, claim_id))
+            if claim_data is None:
+                logger.info(
+                    f"Skipping final report for claim {claim_id}: already completed "
+                    f"and no longer in memory (redundant dispatch)."
+                )
+                return
+            self._ensure_claim_usage(claim_data)
+            ai_service = self._get_ai_service(claim_data)
+            
+            # Estimate tokens for final report generation
+            estimated_tokens_for_final_report = 2000 + (
+                sum(len(excerpt) for paper in claim_data.get('processed_papers', [])
+                    for excerpt in paper.get('excerpts', []) if isinstance(excerpt, str)) +
+                sum(len(explanation) for paper in claim_data.get('processed_papers', [])
+                    for explanation in paper.get('explanations', []) if isinstance(explanation, str))
+            ) / 3.5
+            
+            await self._add_tokens_for_claim(claim_id, estimated_tokens_for_final_report, batch_id)
+
+            # Check token cap
+            if claim_id in self.claim_token_usage and self.claim_token_usage[claim_id] > self.max_tokens_per_claim:
+                return
+
+            # Get bibliometric configuration
+            bibliometric_config = claim_data.get('bibliometric_config', None)
+
+            if len(claim_data['processed_papers']) == 0:
+                logger.error(f"No processed papers found for claim {claim_id}")
+                claim_data['status'] = "processed"
+                report = {
+                    "relevantPapers": [],
+                    "nonRelevantPapers": self.claim_processor._format_non_relevant_papers(claim_data['non_relevant_papers']),
+                    "inaccessiblePapers": self.claim_processor._format_inaccessible_papers(claim_data['inaccessible_papers']),
+                    "explanation": "No relevant papers were found that support or refute this claim.",
+                    "claimRating": -1,
+                    "timing_stats": {},
+                    "searchQueries": claim_data['semantic_scholar_queries'],
+                    "claim_text": claim_data['text'],
+                    "bibliometric_config": bibliometric_config
+                }
+                claim_data['report'] = await self._attach_report_debug(batch_id, claim_id, claim_data, report)
+            else:
+                report, usage = await self.claim_processor.generate_final_report(
+                    claim_data['text'],
+                    claim_data['processed_papers'],
+                    claim_data['non_relevant_papers'],
+                    claim_data['inaccessible_papers'],
+                    claim_data['semantic_scholar_queries'],
+                    ai_service=ai_service,
+                    bibliometric_config=bibliometric_config,
+                    batch_id=batch_id,
+                    claim_id=claim_id,
+                    model_override=self._get_model_override(claim_data, LLMTask.FINAL_REPORT),
+                )
+                
+                claim_data['status'] = "processed"
+                # Add usage to claim data
+                self._add_claim_usage(claim_data, LLMTask.FINAL_REPORT, usage)
+                claim_data['report'] = await self._attach_report_debug(batch_id, claim_id, claim_data, report)
+
+            claim_data["completed_stage"] = LLMTask.FINAL_REPORT
+            claim_data["is_stage_checkpoint"] = False
+
+            # Save the final processed claim
+            await self._save_processed_claim(claim_data, batch_id, claim_id)
+
+        except Exception as e:
+            logger.error(f"Error preparing final report: {type(e).__name__}: {e}", exc_info=True)
+            claim_data = self.claims_in_memory.get((batch_id, claim_id))
+            details = {"exception_type": type(e).__name__, "exception_message": str(e)}
+            if claim_data is None:
+                # The claim finished and was evicted from memory while this attempt
+                # was still running — a stale/duplicate final-report dispatch. The
+                # report that was already saved stands; the verdict is untouched.
+                # This is not a failure of the run, so don't log it as one or claim
+                # a fallback was applied (it was not).
+                await ai_service.add_issue(
+                    batch_id=batch_id,
+                    claim_id=claim_id,
+                    severity="WARN",
+                    stage=LLMTask.FINAL_REPORT,
+                    message="A duplicate final-report attempt errored after this claim had already completed; it was ignored. The saved report and its verdict are unaffected.",
+                    details=details,
+                )
+                return
+            # Genuine failure while finalizing the report: replace it with a fallback
+            # and mark the run failed so it reads as "Failed" instead of masquerading
+            # as a real verdict. The message reflects what actually happened.
+            await ai_service.add_issue(
+                batch_id=batch_id,
+                claim_id=claim_id,
+                severity="ERROR",
+                stage=LLMTask.FINAL_REPORT,
+                message="Final report generation failed — the run was finalized with a fallback report and marked failed.",
+                details=details,
+            )
+            claim_data["status"] = "processed"
+            claim_data["completed_stage"] = LLMTask.FINAL_REPORT
+            claim_data["is_stage_checkpoint"] = False
+            fallback_report = {
+                "relevantPapers": [],
+                "nonRelevantPapers": self.claim_processor._format_non_relevant_papers(
+                    claim_data.get("non_relevant_papers", [])
+                ),
+                "inaccessiblePapers": self.claim_processor._format_inaccessible_papers(
+                    claim_data.get("inaccessible_papers", [])
+                ),
+                "explanation": f"Error generating final report: {str(e)}",
+                "claimRating": -1,
+                "evaluation_failed": True,
+                "timing_stats": {},
+                "searchQueries": claim_data.get("semantic_scholar_queries", []),
+                "claim_text": claim_data.get("text", ""),
+                "bibliometric_config": claim_data.get("bibliometric_config"),
+            }
+            claim_data["report"] = await self._attach_report_debug(
+                batch_id, claim_id, claim_data, fallback_report
+            )
+            await self._save_processed_claim(claim_data, batch_id, claim_id)
+        finally:
+            self.claims_final_reporting_in_progress.discard(claim_id)
+
+    async def check_for_claims(self):
+        """Check for any queued claims and process them."""
+        try:
+            if not os.path.exists(QUEUED_JOBS_DIR):
+                return
+
+            for batch_id in os.listdir(QUEUED_JOBS_DIR):
+                batch_dir = os.path.join(QUEUED_JOBS_DIR, batch_id)
+                if not os.path.isdir(batch_dir):
+                    continue
+
+                for filename in os.listdir(batch_dir):
+                    if not filename.endswith('.txt') or filename == 'claims.txt':
+                        continue
+
+                    file_path = os.path.join(batch_dir, filename)
+                    try:
+                        await asyncio.sleep(0.1)
+                        claim_id = filename[:-4]  # Remove .txt
+                        
+                        # Prefer queued claims if they overlap with saved copies.
+                        if (batch_id, claim_id) in self.claims_in_memory:
+                            claim_data = self.claims_in_memory[(batch_id, claim_id)]
+                        else:
+                            if os.path.exists(os.path.join(SAVED_JOBS_DIR, batch_id, f"{claim_id}.txt")):
+                                logger.warning(
+                                    f"Claim {claim_id} exists in both queued_jobs and saved_jobs; preferring queued copy."
+                                )
+                            # Load new claim into memory
+                            async with aiofiles.open(file_path, 'r') as f:
+                                claim_data = json.loads(await f.read())
+                                self._ensure_claim_usage(claim_data)
+                                self.claims_in_memory[(batch_id, claim_id)] = claim_data
+
+                        self._ensure_claim_usage(claim_data)
+                        
+                        # Check for token limit exceeded, regardless of status
+                        if claim_id in self.claim_token_usage and self.claim_token_usage[claim_id] > self.max_tokens_per_claim:
+                            if claim_data['status'] != 'processed':
+                                logger.warning(f"Claim {claim_id} exceeded token cap but wasn't marked as processed. Fixing.")
+                                claim_data['status'] = 'processed'
+                                ai_service = self._get_ai_service(claim_data)
+                                await ai_service.add_issue(
+                                    batch_id=batch_id,
+                                    claim_id=claim_id,
+                                    severity="ERROR",
+                                    stage="system",
+                                    message="Claim processing stopped: token usage exceeded configured cap.",
+                                    details={
+                                        "max_tokens_per_claim": self.max_tokens_per_claim,
+                                        "claim_tokens": self.claim_token_usage.get(claim_id, 0),
+                                    },
+                                )
+                                report = terminal_failure_report(
+                                    "Stopped: token usage exceeded our cap.",
+                                    queries=claim_data.get('semantic_scholar_queries', []),
+                                    claim_text=claim_data.get('text', ''),
+                                )
+                                claim_data['report'] = await self._attach_report_debug(
+                                    batch_id, claim_id, claim_data, report
+                                )
+                                await self._save_processed_claim(claim_data, batch_id, claim_id)
+                                continue
+                        
+                        # Process based on status
+                        if claim_data['status'] == 'queued':
+                            if claim_id not in self.claims_query_generation_in_progress:
+                                estimated_tokens = 1000 + (len(claim_data['text']) / 3.5)
+                                current_requests, current_tokens = self.calculate_tokens_in_window()
+                                if (estimated_tokens + current_tokens < self.max_tokens_per_window and 
+                                    current_requests < self.max_requests_per_window):
+                                    self.claims_query_generation_in_progress.add(claim_id)
+                                    asyncio.create_task(self.generate_search_queries(claim_data, batch_id, claim_id))
+                                
+                        elif claim_data['status'] == 'ready_for_search':
+                            if not self.claims_searching_in_progress:
+                                self.claims_searching_in_progress.add(claim_id)
+                                asyncio.create_task(self.search_papers(claim_data, batch_id, claim_id))
+                                
+                        elif claim_data['status'] == 'ready_for_analysis':
+                            current_requests, current_tokens = self.calculate_tokens_in_window()
+                            if current_tokens < self.max_tokens_per_window and current_requests < self.max_requests_per_window:
+                                await self.analyze_claim(claim_data, batch_id, claim_id)
+                                
+                        elif claim_data['status'] == 'processed':
+                            await self._save_processed_claim(claim_data, batch_id, claim_id)
+
+                    except Exception as e:
+                        logger.error(f"Error processing claim file {file_path}: {str(e)}")
+
+        except Exception as e:
+            logger.error(f"Error checking for claims: {str(e)}")
+
+    # Create an async wrapper for shutil operations
+    async def async_move_file(self, src, dst):
+        await asyncio.to_thread(shutil.move, src, dst)
+
+    async def async_rmtree(self, path):
+        await asyncio.to_thread(shutil.rmtree, path)
+
+async def main():
+    """Main function to run the processor."""
+    try:
+        settings.Config.validate_config()
+        await asyncio.to_thread(os.makedirs, QUEUED_JOBS_DIR, exist_ok=True)
+        await asyncio.to_thread(os.makedirs, SAVED_JOBS_DIR, exist_ok=True)
+
+        # Clear all lock files in every subdirectory of QUEUED_JOBS_DIR
+        for batch_id in os.listdir(QUEUED_JOBS_DIR):
+            batch_dir = os.path.join(QUEUED_JOBS_DIR, batch_id)
+            if os.path.isdir(batch_dir):
+                for filename in os.listdir(batch_dir):
+                    if filename.endswith('.lock'):
+                        os.remove(os.path.join(batch_dir, filename))
+
+        processor = ValsciProcessor()
+        recovered_waiting_runs = processor.recover_waiting_reuse_runs()
+        if recovered_waiting_runs:
+            logger.info("Recovered %s waiting reuse runs during startup.", recovered_waiting_runs)
+        logger.info("Started monitoring queued_jobs directory")
+
+        last_heartbeat = 0.0
+        # Live config reload: when env_vars.json changes (e.g. saved from the
+        # Settings page), re-apply it to Config so the next claim's LLM gateway —
+        # which the GatewayFactory rebuilds from fresh Config reads — picks up the
+        # new routing, token budgets, timeouts, etc. without restarting the
+        # process. Storage-path settings, captured at import, still need a restart.
+        last_config_mtime = env_file_mtime()
+        while True:
+            try:
+                current_config_mtime = env_file_mtime()
+                if current_config_mtime is not None and current_config_mtime != last_config_mtime:
+                    try:
+                        await asyncio.to_thread(apply_env_vars_to_runtime)
+                        last_config_mtime = current_config_mtime
+                        logger.info("Reloaded configuration from env_vars.json (live update).")
+                    except Exception as exc:
+                        logger.error(f"Failed to reload env_vars.json: {exc}")
+                if time.time() - last_heartbeat >= processor_heartbeat.WRITE_INTERVAL_SECONDS:
+                    await asyncio.to_thread(
+                        processor_heartbeat.write_heartbeat,
+                        settings.Config.STATE_DIR,
+                        config_mtime=last_config_mtime,
+                    )
+                    last_heartbeat = time.time()
+                await processor.check_for_claims()
+                await asyncio.sleep(1)
+            except Exception as e:
+                logger.error(f"Error in check_for_claims: {str(e)}")
+                # Don't let one error stop the entire process
+                continue
+
+    except KeyboardInterrupt:
+        logger.info("Shutting down processor")
+        # Clean up any in-progress tasks
+        for task in asyncio.all_tasks():
+            if task is not asyncio.current_task():
+                task.cancel()
+    except Exception as e:
+        logger.error(f"Fatal error in main loop: {str(e)}")
+        raise
+    finally:
+        # Additional cleanup if needed
+        logger.info("Cleanup complete")
+
+if __name__ == "__main__":
+    asyncio.run(main())

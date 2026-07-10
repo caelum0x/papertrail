@@ -1,0 +1,542 @@
+[
+  {
+    "id": "3",
+    "claim": "1,000 genomes project enables mapping of genetic sequence variation consisting of rare variants with larger penetrance effects than common variants.",
+    "sourceText": "Rare Variants Create Synthetic Genome-Wide Associations\nGenome-wide association studies (GWAS) have now identified at least 2,000 common variants that appear associated with common diseases or related traits (http://www.genome.gov/gwastudies), hundreds of which have been convincingly replicated. It is generally thought that the associated markers reflect the effect of a nearby common (minor allele frequency >0.05) causal site, which is associated with the marker, leading to extensive resequencing efforts to find causal sites. We propose as an alternative explanation that variants much less common than the associated one may create \"synthetic associations\" by occurring, stochastically, more often in association with one of the alleles at the common site versus the other allele. Although synthetic associations are an obvious theoretical possibility, they have never been systematically explored as a possible explanation for GWAS findings. Here, we use simple computer simulations to show the conditions under which such synthetic associations will arise and how they may be recognized. We show that they are not only possible, but inevitable, and that under simple but reasonable genetic models, they are likely to account for or contribute to many of the recently identified signals reported in genome-wide association studies. We also illustrate the behavior of synthetic associations in real datasets by showing that rare causal mutations responsible for both hearing loss and sickle cell anemia create genome-wide significant synthetic associations, in the latter case extending over a 2.5-Mb interval encompassing scores of \"blocks\" of associated variants. In conclusion, uncommon or rare genetic variants can easily create synthetic associations that are credited to common variants, and this possibility requires careful consideration in the interpretation and follow up of GWAS signals.",
+    "goldLabel": "SUPPORT",
+    "citedDocIds": [
+      14717500
+    ]
+  },
+  {
+    "id": "5",
+    "claim": "1/2000 in UK have abnormal PrP positivity.",
+    "sourceText": "Prevalent abnormal prion protein in human appendixes after bovine spongiform encephalopathy epizootic: large scale survey\nOBJECTIVES To carry out a further survey of archived appendix samples to understand better the differences between existing estimates of the prevalence of subclinical infection with prions after the bovine spongiform encephalopathy epizootic and to see whether a broader birth cohort was affected, and to understand better the implications for the management of blood and blood products and for the handling of surgical instruments.   \n DESIGN Irreversibly unlinked and anonymised large scale survey of archived appendix samples.   \n SETTING Archived appendix samples from the pathology departments of 41 UK hospitals participating in the earlier survey, and additional hospitals in regions with lower levels of participation in that survey.    SAMPLE 32,441 archived appendix samples fixed in formalin and embedded in paraffin and tested for the presence of abnormal prion protein (PrP).   \n RESULTS Of the 32,441 appendix samples 16 were positive for abnormal PrP, indicating an overall prevalence of 493 per million population (95% confidence interval 282 to 801 per million). The prevalence in those born in 1941-60 (733 per million, 269 to 1596 per million) did not differ significantly from those born between 1961 and 1985 (412 per million, 198 to 758 per million) and was similar in both sexes and across the three broad geographical areas sampled. Genetic testing of the positive specimens for the genotype at PRNP codon 129 revealed a high proportion that were valine homozygous compared with the frequency in the normal population, and in stark contrast with confirmed clinical cases of vCJD, all of which were methionine homozygous at PRNP codon 129.   \n CONCLUSIONS This study corroborates previous studies and suggests a high prevalence of infection with abnormal PrP, indicating vCJD carrier status in the population compared with the 177 vCJD cases to date. These findings have important implications for the management of blood and blood products and for the handling of surgical instruments.",
+    "goldLabel": "SUPPORT",
+    "citedDocIds": [
+      13734012
+    ]
+  },
+  {
+    "id": "49",
+    "claim": "ADAR1 binds to Dicer to cleave pre-miRNA.",
+    "sourceText": "ADAR1 Forms a Complex with Dicer to Promote MicroRNA Processing and RNA-Induced Gene Silencing\nAdenosine deaminases acting on RNA (ADARs) are involved in RNA editing that converts adenosine residues to inosine specifically in double-stranded RNAs. In this study, we investigated the interaction of the RNA editing mechanism with the RNA interference (RNAi) machinery and found that ADAR1 forms a complex with Dicer through direct protein-protein interaction. Most importantly, ADAR1 increases the maximum rate (Vmax) of pre-microRNA (miRNA) cleavage by Dicer and facilitates loading of miRNA onto RNA-induced silencing complexes, identifying a new role of ADAR1 in miRNA processing and RNAi mechanisms. ADAR1 differentiates its functions in RNA editing and RNAi by the formation of either ADAR1/ADAR1 homodimer or Dicer/ADAR1 heterodimer complexes, respectively. As expected, the expression of miRNAs is globally inhibited in ADAR1(-/-) mouse embryos, which, in turn, alters the expression of their target genes and might contribute to their embryonic lethal phenotype.",
+    "goldLabel": "SUPPORT",
+    "citedDocIds": [
+      5953485
+    ]
+  },
+  {
+    "id": "50",
+    "claim": "AIRE is expressed in some skin tumors.",
+    "sourceText": "Keratin-dependent regulation of Aire and gene expression in skin tumor keratinocytes\nExpression of the intermediate filament protein keratin 17 (K17) is robustly upregulated in inflammatory skin diseases and in many tumors originating in stratified and pseudostratified epithelia. We report that autoimmune regulator (Aire), a transcriptional regulator, is inducibly expressed in human and mouse tumor keratinocytes in a K17-dependent manner and is required for timely onset of Gli2-induced skin tumorigenesis in mice. The induction of Aire mRNA in keratinocytes depends on a functional interaction between K17 and the heterogeneous nuclear ribonucleoprotein hnRNP K. Further, K17 colocalizes with Aire protein in the nucleus of tumor-prone keratinocytes, and each factor is bound to a specific promoter region featuring an NF-κB consensus sequence in a relevant subset of K17- and Aire-dependent proinflammatory genes. These findings provide radically new insight into keratin intermediate filament and Aire function, along with a molecular basis for the K17-dependent amplification of inflammatory and immune responses in diseased epithelia.",
+    "goldLabel": "SUPPORT",
+    "citedDocIds": [
+      12580014
+    ]
+  },
+  {
+    "id": "53",
+    "claim": "ALDH1 expression is associated with poorer prognosis in breast cancer.",
+    "sourceText": "ALDH1 is a marker of normal and malignant human mammary stem cells and a predictor of poor clinical outcome.\nApplication of stem cell biology to breast cancer research has been limited by the lack of simple methods for identification and isolation of normal and malignant stem cells. Utilizing in vitro and in vivo experimental systems, we show that normal and cancer human mammary epithelial cells with increased aldehyde dehydrogenase activity (ALDH) have stem/progenitor properties. These cells contain the subpopulation of normal breast epithelium with the broadest lineage differentiation potential and greatest growth capacity in a xenotransplant model. In breast carcinomas, high ALDH activity identifies the tumorigenic cell fraction, capable of self-renewal and of generating tumors that recapitulate the heterogeneity of the parental tumor. In a series of 577 breast carcinomas, expression of ALDH1 detected by immunostaining correlated with poor prognosis. These findings offer an important new tool for the study of normal and malignant breast stem cells and facilitate the clinical application of stem cell concepts.",
+    "goldLabel": "SUPPORT",
+    "citedDocIds": [
+      45638119
+    ]
+  },
+  {
+    "id": "56",
+    "claim": "APOE4 expression in iPSC-derived neurons increases AlphaBeta production and tau phosphorylation causing GABA neuron degeneration.",
+    "sourceText": "Gain of toxic Apolipoprotein E4 effects in Human iPSC-Derived Neurons Is Ameliorated by a Small-Molecule Structure Corrector\nEfforts to develop drugs for Alzheimer's disease (AD) have shown promise in animal studies, only to fail in human trials, suggesting a pressing need to study AD in human model systems. Using human neurons derived from induced pluripotent stem cells that expressed apolipoprotein E4 (ApoE4), a variant of the APOE gene product and the major genetic risk factor for AD, we demonstrated that ApoE4-expressing neurons had higher levels of tau phosphorylation, unrelated to their increased production of amyloid-β (Aβ) peptides, and that they displayed GABAergic neuron degeneration. ApoE4 increased Aβ production in human, but not in mouse, neurons. Converting ApoE4 to ApoE3 by gene editing rescued these phenotypes, indicating the specific effects of ApoE4. Neurons that lacked APOE behaved similarly to those expressing ApoE3, and the introduction of ApoE4 expression recapitulated the pathological phenotypes, suggesting a gain of toxic effects from ApoE4. Treatment of ApoE4-expressing neurons with a small-molecule structure corrector ameliorated the detrimental effects, thus showing that correcting the pathogenic conformation of ApoE4 is a viable therapeutic approach for ApoE4-related AD.",
+    "goldLabel": "SUPPORT",
+    "citedDocIds": [
+      4709641
+    ]
+  },
+  {
+    "id": "100",
+    "claim": "All hematopoietic stem cells segregate their chromosomes randomly.",
+    "sourceText": "Haematopoietic stem cells do not asymmetrically segregate chromosomes or retain BrdU\nStem cells are proposed to segregate chromosomes asymmetrically during self-renewing divisions so that older (‘immortal’) DNA strands are retained in daughter stem cells whereas newly synthesized strands segregate to differentiating cells. Stem cells are also proposed to retain DNA labels, such as 5-bromo-2-deoxyuridine (BrdU), either because they segregate chromosomes asymmetrically or because they divide slowly. However, the purity of stem cells among BrdU-label-retaining cells has not been documented in any tissue, and the ‘immortal strand hypothesis’ has not been tested in a system with definitive stem cell markers. Here we tested these hypotheses in haematopoietic stem cells (HSCs), which can be highly purified using well characterized markers. We administered BrdU to newborn mice, mice treated with cyclophosphamide and granulocyte colony-stimulating factor, and normal adult mice for 4 to 10 days, followed by 70 days without BrdU. In each case, less than 6% of HSCs retained BrdU and less than 0.5% of all BrdU-retaining haematopoietic cells were HSCs, revealing that BrdU has poor specificity and poor sensitivity as an HSC marker. Sequential administration of 5-chloro-2-deoxyuridine and 5-iodo-2-deoxyuridine indicated that all HSCs segregate their chromosomes randomly. Division of individual HSCs in culture revealed no asymmetric segregation of the label. Thus, HSCs cannot be identified on the basis of BrdU-label retention and do not retain older DNA strands during division, indicating that these are not general properties of stem cells.",
+    "goldLabel": "SUPPORT",
+    "citedDocIds": [
+      4381486
+    ]
+  },
+  {
+    "id": "118",
+    "claim": "Antibiotic induced alterations in the gut microbiome reduce resistance against Clostridium difficile",
+    "sourceText": "Antibiotic-induced shifts in the mouse gut microbiome and metabolome increase susceptibility to Clostridium difficile infection\nAntibiotics can have significant and long-lasting effects on the gastrointestinal tract microbiota, reducing colonization resistance against pathogens including Clostridium difficile. Here we show that antibiotic treatment induces substantial changes in the gut microbial community and in the metabolome of mice susceptible to C. difficile infection. Levels of secondary bile acids, glucose, free fatty acids and dipeptides decrease, whereas those of primary bile acids and sugar alcohols increase, reflecting the modified metabolic activity of the altered gut microbiome. In vitro and ex vivo analyses demonstrate that C. difficile can exploit specific metabolites that become more abundant in the mouse gut after antibiotics, including the primary bile acid taurocholate for germination, and carbon sources such as mannitol, fructose, sorbitol, raffinose and stachyose for growth. Our results indicate that antibiotic-mediated alteration of the gut microbiome converts the global metabolic profile to one that favours C. difficile germination and growth.",
+    "goldLabel": "SUPPORT",
+    "citedDocIds": [
+      6372244
+    ]
+  },
+  {
+    "id": "137",
+    "claim": "Asymptomatic visual impairment screening in elderly populations does not lead to improved vision.",
+    "sourceText": "Effectiveness of screening older people for impaired vision in community setting: systematic review of evidence from randomised controlled trials.\nOBJECTIVE To assess whether population screening for impaired vision among older people in the community leads to improvements in vision.   \n DESIGN Systematic review of randomised controlled trials of population screening in the community that included any assessment of vision or visual function with at least 6 months' follow up.    SUBJECTS Adults aged 65 or over.   \n MAIN OUTCOME MEASURE Proportions with visual impairment in intervention and control groups with any method of assessing visual impairment.   \n RESULTS There were no trials that primarily assessed visual screening. Outcome data on vision were available for 3494 people in five trials of multiphasic assessment. All the trials used self reported measures for vision impairment, both as screening tools and as outcome measures. The inclusion of a visual screening component in the assessment did not result in improvements in self reported visual problems (pooled odds ratio 1.04:95% confidence interval 0.89 to 1.22). A small reduction (11%) in the number of older people with self reported visual problems cannot be excluded.   \n CONCLUSIONS Screening of asymptomatic older people in the community is not justified on present evidence. Visual impairment in this age group can usually be reduced with treatment. It is unclear why no benefit was seen. Further work is needed to clarify what interventions are appropriate for older people with unreported impairment of vision.",
+    "goldLabel": "SUPPORT",
+    "citedDocIds": [
+      26016929
+    ]
+  },
+  {
+    "id": "148",
+    "claim": "Autophagy declines in aged organisms.",
+    "sourceText": "Restoration of chaperone-mediated autophagy in aging liver improves cellular maintenance and hepatic function\nChaperone-mediated autophagy (CMA), a selective mechanism for degradation of cytosolic proteins in lysosomes, contributes to the removal of altered proteins as part of the cellular quality-control systems. We have previously found that CMA activity declines in aged organisms and have proposed that this failure in cellular clearance could contribute to the accumulation of altered proteins, the abnormal cellular homeostasis and, eventually, the functional loss characteristic of aged organisms. To determine whether these negative features of aging can be prevented by maintaining efficient autophagic activity until late in life, in this work we have corrected the CMA defect in aged rodents. We have generated a double transgenic mouse model in which the amount of the lysosomal receptor for CMA, previously shown to decrease in abundance with age, can be modulated. We have analyzed in this model the consequences of preventing the age-dependent decrease in receptor abundance in aged rodents at the cellular and organ levels. We show here that CMA activity is maintained until advanced ages if the decrease in the receptor abundance is prevented and that preservation of autophagic activity is associated with lower intracellular accumulation of damaged proteins, better ability to handle protein damage and improved organ function.",
+    "goldLabel": "SUPPORT",
+    "citedDocIds": [
+      1084345
+    ]
+  },
+  {
+    "id": "208",
+    "claim": "CHEK2 is not associated with breast cancer.",
+    "sourceText": "Linkage Disequilibrium Mapping of       CHEK2: Common Variation and Breast Cancer Risk     \nBackground Checkpoint kinase 2 (CHEK2) averts cancer development by promoting cell cycle arrest and activating DNA repair in genetically damaged cells. Previous investigation has established a role for the CHEK2 gene in breast cancer aetiology, but studies have largely been limited to the rare 1100delC mutation. Whether common polymorphisms in this gene influence breast cancer risk remains unknown. In this study, we aimed to assess the importance of common CHEK2 variants on population risk for breast cancer by capturing the majority of diversity in the gene using haplotype tagging single nucleotide polymorphisms (tagSNPs). Methods and Findings We analyzed 14 common SNPs spanning 52 kilobases (kb) of the CHEK2 gene in 92 Swedish women. Coverage evaluation indicated that these typed SNPs would efficiently convey association signal also from untyped SNPs in the same region. Six of the 14 SNPs predicted well both the haplotypic and single SNP variations within CHEK2. We genotyped these six tagSNPs in 1,577 postmenopausal breast cancer cases and 1,513 population controls, but found no convincing association between any common CHEK2 haplotype and breast cancer risk. The 1100delC mutation was rare in our Swedish population—0.7% in cases and 0.4% in controls— with a corresponding odds ratio for carriers versus noncarriers of 2.26 (95% confidence interval, 0.99–5.15). Estimates of the population frequency and the odds ratio of 1100delC indicate that our sample is representative of a Northern European population.",
+    "goldLabel": "SUPPORT",
+    "citedDocIds": [
+      13519661
+    ]
+  },
+  {
+    "id": "217",
+    "claim": "CX3CR1 on the Th2 cells promotes T cell survival",
+    "sourceText": "CX3CR1 is required for airway inflammation by promoting T helper cell survival and maintenance in inflamed lung\nAllergic asthma is a T helper type 2 (T(H)2)-dominated disease of the lung. In people with asthma, a fraction of CD4(+) T cells express the CX3CL1 receptor, CX3CR1, and CX3CL1 expression is increased in airway smooth muscle, lung endothelium and epithelium upon allergen challenge. Here we found that untreated CX3CR1-deficient mice or wild-type (WT) mice treated with CX3CR1-blocking reagents show reduced lung disease upon allergen sensitization and challenge. Transfer of WT CD4(+) T cells into CX3CR1-deficient mice restored the cardinal features of asthma, and CX3CR1-blocking reagents prevented airway inflammation in CX3CR1-deficient recipients injected with WT T(H)2 cells. We found that CX3CR1 signaling promoted T(H)2 survival in the inflamed lungs, and injection of B cell leukemia/lymphoma-2 protein (BCl-2)-transduced CX3CR1-deficient T(H)2 cells into CX3CR1-deficient mice restored asthma. CX3CR1-induced survival was also observed for T(H)1 cells upon airway inflammation but not under homeostatic conditions or upon peripheral inflammation. Therefore, CX3CR1 and CX3CL1 may represent attractive therapeutic targets in asthma.",
+    "goldLabel": "SUPPORT",
+    "citedDocIds": [
+      21366394
+    ]
+  },
+  {
+    "id": "218",
+    "claim": "CX3CR1 on the Th2 cells promotes airway inflammation.",
+    "sourceText": "CX3CR1 is required for airway inflammation by promoting T helper cell survival and maintenance in inflamed lung\nAllergic asthma is a T helper type 2 (T(H)2)-dominated disease of the lung. In people with asthma, a fraction of CD4(+) T cells express the CX3CL1 receptor, CX3CR1, and CX3CL1 expression is increased in airway smooth muscle, lung endothelium and epithelium upon allergen challenge. Here we found that untreated CX3CR1-deficient mice or wild-type (WT) mice treated with CX3CR1-blocking reagents show reduced lung disease upon allergen sensitization and challenge. Transfer of WT CD4(+) T cells into CX3CR1-deficient mice restored the cardinal features of asthma, and CX3CR1-blocking reagents prevented airway inflammation in CX3CR1-deficient recipients injected with WT T(H)2 cells. We found that CX3CR1 signaling promoted T(H)2 survival in the inflamed lungs, and injection of B cell leukemia/lymphoma-2 protein (BCl-2)-transduced CX3CR1-deficient T(H)2 cells into CX3CR1-deficient mice restored asthma. CX3CR1-induced survival was also observed for T(H)1 cells upon airway inflammation but not under homeostatic conditions or upon peripheral inflammation. Therefore, CX3CR1 and CX3CL1 may represent attractive therapeutic targets in asthma.",
+    "goldLabel": "SUPPORT",
+    "citedDocIds": [
+      21366394
+    ]
+  },
+  {
+    "id": "230",
+    "claim": "Carriers of the alcohol aldehyde dehydrogenase deficiency mutation drink less that non-carries.",
+    "sourceText": "Alcohol Intake and Blood Pressure: A Systematic Review Implementing a Mendelian Randomization Approach\nBACKGROUND Alcohol has been reported to be a common and modifiable risk factor for hypertension. However, observational studies are subject to confounding by other behavioural and sociodemographic factors, while clinical trials are difficult to implement and have limited follow-up time. Mendelian randomization can provide robust evidence on the nature of this association by use of a common polymorphism in aldehyde dehydrogenase 2 (ALDH2) as a surrogate for measuring alcohol consumption. ALDH2 encodes a major enzyme involved in alcohol metabolism. Individuals homozygous for the null variant (*2*2) experience adverse symptoms when drinking alcohol and consequently drink considerably less alcohol than wild-type homozygotes (*1*1) or heterozygotes. We hypothesise that this polymorphism may influence the risk of hypertension by affecting alcohol drinking behaviour.   \n METHODS AND FINDINGS We carried out fixed effect meta-analyses of the ALDH2 genotype with blood pressure (five studies, n = 7,658) and hypertension (three studies, n = 4,219) using studies identified via systematic review. In males, we obtained an overall odds ratio of 2.42 (95% confidence interval [CI] 1.66-3.55, p = 4.8 x 10(-6)) for hypertension comparing *1*1 with *2*2 homozygotes and an odds ratio of 1.72 (95% CI 1.17-2.52, p = 0.006) comparing heterozygotes (surrogate for moderate drinkers) with *2*2 homozygotes. Systolic blood pressure was 7.44 mmHg (95% CI 5.39-9.49, p = 1.1 x 10(-12)) greater among *1*1 than among *2*2 homozygotes, and 4.24 mmHg (95% CI 2.18-6.31, p = 0.00005) greater among heterozygotes than among *2*2 homozygotes.   \n CONCLUSIONS These findings support the hypothesis that alcohol intake has a marked effect on blood pressure and the risk of hypertension.",
+    "goldLabel": "SUPPORT",
+    "citedDocIds": [
+      3067015
+    ]
+  },
+  {
+    "id": "236",
+    "claim": "Cell autonomous sex determination in somatic cells occurs in Passeriformes.",
+    "sourceText": "Somatic sex identity is cell-autonomous in the chicken\nIn the mammalian model of sex determination, embryos are considered to be sexually indifferent until the transient action of a sex-determining gene initiates gonadal differentiation. Although this model is thought to apply to all vertebrates, this has yet to be established. Here we have examined three lateral gynandromorph chickens (a rare, naturally occurring phenomenon in which one side of the animal appears male and the other female) to investigate the sex-determining mechanism in birds. These studies demonstrated that gynandromorph birds are genuine male:female chimaeras, and indicated that male and female avian somatic cells may have an inherent sex identity. To test this hypothesis, we transplanted presumptive mesoderm between embryos of reciprocal sexes to generate embryos containing male:female chimaeric gonads. In contrast to the outcome for mammalian mixed-sex chimaeras, in chicken mixed-sex chimaeras the donor cells were excluded from the functional structures of the host gonad. In an example where female tissue was transplanted into a male host, donor cells contributing to the developing testis retained a female identity and expressed a marker of female function. Our study demonstrates that avian somatic cells possess an inherent sex identity and that, in birds, sexual differentiation is substantively cell autonomous.",
+    "goldLabel": "SUPPORT",
+    "citedDocIds": [
+      4388470
+    ]
+  },
+  {
+    "id": "239",
+    "claim": "Cellular aging closely links to an older appearance.",
+    "sourceText": "Perceived age as clinically useful biomarker of ageing: cohort study.\nOBJECTIVE To determine whether perceived age correlates with survival and important age related phenotypes.   \n DESIGN Follow-up study, with survival of twins determined up to January 2008, by which time 675 (37%) had died.   \n SETTING Population based twin cohort in Denmark.   \n PARTICIPANTS 20 nurses, 10 young men, and 11 older women (assessors); 1826 twins aged >or=70.   \n MAIN OUTCOME MEASURES Assessors: perceived age of twins from photographs. Twins: physical and cognitive tests and molecular biomarker of ageing (leucocyte telomere length).   \n RESULTS For all three groups of assessors, perceived age was significantly associated with survival, even after adjustment for chronological age, sex, and rearing environment. Perceived age was still significantly associated with survival after further adjustment for physical and cognitive functioning. The likelihood that the older looking twin of the pair died first increased with increasing discordance in perceived age within the twin pair-that is, the bigger the difference in perceived age within the pair, the more likely that the older looking twin died first. Twin analyses suggested that common genetic factors influence both perceived age and survival. Perceived age, controlled for chronological age and sex, also correlated significantly with physical and cognitive functioning as well as with leucocyte telomere length.   \n CONCLUSION Perceived age-which is widely used by clinicians as a general indication of a patient's health-is a robust biomarker of ageing that predicts survival among those aged >or=70 and correlates with important functional and molecular ageing phenotypes.",
+    "goldLabel": "SUPPORT",
+    "citedDocIds": [
+      14079881
+    ]
+  },
+  {
+    "id": "248",
+    "claim": "Chenodeosycholic acid treatment increases whole-body energy expenditure.",
+    "sourceText": "The Bile Acid Chenodeoxycholic Acid Increases Human Brown Adipose Tissue Activity.\nThe interest in brown adipose tissue (BAT) as a target to combat metabolic disease has recently been renewed with the discovery of functional BAT in humans. In rodents, BAT can be activated by bile acids, which activate type 2 iodothyronine deiodinase (D2) in BAT via the G-coupled protein receptor TGR5, resulting in increased oxygen consumption and energy expenditure. Here we examined the effects of oral supplementation of the bile acid chenodeoxycholic acid (CDCA) on human BAT activity. Treatment of 12 healthy female subjects with CDCA for 2 days resulted in increased BAT activity. Whole-body energy expenditure was also increased upon CDCA treatment. In vitro treatment of primary human brown adipocytes derived with CDCA or specific TGR5 agonists increased mitochondrial uncoupling and D2 expression, an effect that was absent in human primary white adipocytes. These findings identify bile acids as a target to activate BAT in humans.",
+    "goldLabel": "SUPPORT",
+    "citedDocIds": [
+      1568684
+    ]
+  },
+  {
+    "id": "279",
+    "claim": "Commelina yellow mottle virus' (ComYMV) genome consists of 7489 baise pairs.",
+    "sourceText": "Properties of Commelina yellow mottle virus's complete DNA sequence, genomic discontinuities and transcript suggest that it is a pararetrovirus.\nThe non-enveloped bacilliform viruses are the second group of plant viruses known to possess a genome consisting of circular double-stranded DNA. We have characterized the viral transcript and determined the complete sequence of the genome of Commelina mellow mottle virus (CoYMV), a member of this group. Analysis of the viral transcript indicates that the virus encodes a single terminally-redundant genome-length plus 120 nucleotide transcript. A fraction of the transcripts is polyadenylated, although the majority of the transcript is not polyadenylated. Analysis of the genome sequence indicates that the genome is 7489 bp in size and that the transcribed strand contains three open reading frames capable of encoding proteins of 23, 15 and 216 kd. The function of the 25 and 15 kd proteins is unknown. Similarities between the 216 kd polypeptide and the cauliflower mosaic virus coat protein and protease/reverse transcriptase polyprotein suggest that the 216 kd polypeptide is a polyprotein that is proteolytically processed to yield the virion coat protein, a protease, and replicase (reverse transcriptase and ribonuclease H). Each strand of the CoYMV genome is interrupted by site-specific discontinuities. The locations of the 5'-ends of these discontinuities, and the presence and location of a region on the CoYMV transcript capable of annealing with the 3'-end of cytosolic initiator methionine tRNA are consistent with replication by reverse transcription. We have demonstrated that a construct containing 1.3 CoYMV genomes is infective when introduced into Commelina diffusa, the host for CoYMV, using Agrobacterium-mediated infection.",
+    "goldLabel": "SUPPORT",
+    "citedDocIds": [
+      14376683
+    ]
+  },
+  {
+    "id": "295",
+    "claim": "Crosstalk between dendritic cells (DCs) and innate lymphoid cells (ILCs) is important in the regulation of intestinal homeostasis.",
+    "sourceText": "The Transcription Factor T-bet Regulates Intestinal Inflammation Mediated by Interleukin-7 Receptor+ Innate Lymphoid Cells\nMice lacking the transcription factor T-bet in the innate immune system develop microbiota-dependent colitis. Here, we show that interleukin-17A (IL-17A)-producing IL-7Rα(+) innate lymphoid cells (ILCs) were potent promoters of disease in Tbx21(-/-)Rag2(-/-) ulcerative colitis (TRUC) mice. TNF-α produced by CD103(-)CD11b(+) dendritic cells synergized with IL-23 to drive IL-17A production by ILCs, demonstrating a previously unrecognized layer of cellular crosstalk between dendritic cells and ILCs. We have identified Helicobacter typhlonius as a key disease trigger driving excess TNF-α production and promoting colitis in TRUC mice. Crucially, T-bet also suppressed the expression of IL-7R, a key molecule involved in controlling intestinal ILC homeostasis. The importance of IL-7R signaling in TRUC disease was highlighted by the dramatic reduction in intestinal ILCs and attenuated colitis following IL-7R blockade. Taken together, these data demonstrate the mechanism by which T-bet regulates the complex interplay between mucosal dendritic cells, ILCs, and the intestinal microbiota.",
+    "goldLabel": "SUPPORT",
+    "citedDocIds": [
+      20310709
+    ]
+  },
+  {
+    "id": "298",
+    "claim": "Cytochrome c is released from the mitochondrial intermembrane space to cytosol during apoptosis.",
+    "sourceText": "At the gates of death.\nApoptosis that proceeds via the mitochondrial pathway involves mitochondrial outer membrane permeabilization (MOMP), responsible for the release of cytochrome c and other proteins of the mitochondrial intermembrane space. This essential step is controlled and mediated by proteins of the Bcl-2 family. The proapoptotic proteins Bax and Bak are required for MOMP, while the antiapoptotic Bcl-2 proteins, including Bcl-2, Bcl-xL, Mcl-1, and others, prevent MOMP. Different proapoptotic BH3-only proteins act to interfere with the function of the antiapoptotic Bcl-2 members and/or activate Bax and Bak. Here, we discuss an emerging view, proposed by Certo et al. in this issue of Cancer Cell, on how these interactions result in MOMP and apoptosis.",
+    "goldLabel": "SUPPORT",
+    "citedDocIds": [
+      39381118
+    ]
+  },
+  {
+    "id": "48",
+    "claim": "A total of 1,000 people in the UK are asymptomatic carriers of vCJD infection.",
+    "sourceText": "Prevalent abnormal prion protein in human appendixes after bovine spongiform encephalopathy epizootic: large scale survey\nOBJECTIVES To carry out a further survey of archived appendix samples to understand better the differences between existing estimates of the prevalence of subclinical infection with prions after the bovine spongiform encephalopathy epizootic and to see whether a broader birth cohort was affected, and to understand better the implications for the management of blood and blood products and for the handling of surgical instruments.   \n DESIGN Irreversibly unlinked and anonymised large scale survey of archived appendix samples.   \n SETTING Archived appendix samples from the pathology departments of 41 UK hospitals participating in the earlier survey, and additional hospitals in regions with lower levels of participation in that survey.    SAMPLE 32,441 archived appendix samples fixed in formalin and embedded in paraffin and tested for the presence of abnormal prion protein (PrP).   \n RESULTS Of the 32,441 appendix samples 16 were positive for abnormal PrP, indicating an overall prevalence of 493 per million population (95% confidence interval 282 to 801 per million). The prevalence in those born in 1941-60 (733 per million, 269 to 1596 per million) did not differ significantly from those born between 1961 and 1985 (412 per million, 198 to 758 per million) and was similar in both sexes and across the three broad geographical areas sampled. Genetic testing of the positive specimens for the genotype at PRNP codon 129 revealed a high proportion that were valine homozygous compared with the frequency in the normal population, and in stark contrast with confirmed clinical cases of vCJD, all of which were methionine homozygous at PRNP codon 129.   \n CONCLUSIONS This study corroborates previous studies and suggests a high prevalence of infection with abnormal PrP, indicating vCJD carrier status in the population compared with the 177 vCJD cases to date. These findings have important implications for the management of blood and blood products and for the handling of surgical instruments.",
+    "goldLabel": "CONTRADICT",
+    "citedDocIds": [
+      13734012
+    ]
+  },
+  {
+    "id": "51",
+    "claim": "ALDH1 expression is associated with better breast cancer outcomes.",
+    "sourceText": "ALDH1 is a marker of normal and malignant human mammary stem cells and a predictor of poor clinical outcome.\nApplication of stem cell biology to breast cancer research has been limited by the lack of simple methods for identification and isolation of normal and malignant stem cells. Utilizing in vitro and in vivo experimental systems, we show that normal and cancer human mammary epithelial cells with increased aldehyde dehydrogenase activity (ALDH) have stem/progenitor properties. These cells contain the subpopulation of normal breast epithelium with the broadest lineage differentiation potential and greatest growth capacity in a xenotransplant model. In breast carcinomas, high ALDH activity identifies the tumorigenic cell fraction, capable of self-renewal and of generating tumors that recapitulate the heterogeneity of the parental tumor. In a series of 577 breast carcinomas, expression of ALDH1 detected by immunostaining correlated with poor prognosis. These findings offer an important new tool for the study of normal and malignant breast stem cells and facilitate the clinical application of stem cell concepts.",
+    "goldLabel": "CONTRADICT",
+    "citedDocIds": [
+      45638119
+    ]
+  },
+  {
+    "id": "54",
+    "claim": "AMP-activated protein kinase (AMPK) activation increases inflammation-related fibrosis in the lungs.",
+    "sourceText": "Metformin reverses established lung fibrosis in a bleomycin model\nFibrosis is a pathological result of a dysfunctional repair response to tissue injury and occurs in a number of organs, including the lungs1. Cellular metabolism regulates tissue repair and remodelling responses to injury2-4. AMPK is a critical sensor of cellular bioenergetics and controls the switch from anabolic to catabolic metabolism5. However, the role of AMPK in fibrosis is not well understood. Here, we demonstrate that in humans with idiopathic pulmonary fibrosis (IPF) and in an experimental mouse model of lung fibrosis, AMPK activity is lower in fibrotic regions associated with metabolically active and apoptosis-resistant myofibroblasts. Pharmacological activation of AMPK in myofibroblasts from lungs of humans with IPF display lower fibrotic activity, along with enhanced mitochondrial biogenesis and normalization of sensitivity to apoptosis. In a bleomycin model of lung fibrosis in mice, metformin therapeutically accelerates the resolution of well-established fibrosis in an AMPK-dependent manner. These studies implicate deficient AMPK activation in non-resolving, pathologic fibrotic processes, and support a role for metformin (or other AMPK activators) to reverse established fibrosis by facilitating deactivation and apoptosis of myofibroblasts.",
+    "goldLabel": "CONTRADICT",
+    "citedDocIds": [
+      49556906
+    ]
+  },
+  {
+    "id": "57",
+    "claim": "APOE4 expression in iPSC-derived neurons increases AlphaBeta production and tau phosphorylation, delaying GABA neuron degeneration.",
+    "sourceText": "Gain of toxic Apolipoprotein E4 effects in Human iPSC-Derived Neurons Is Ameliorated by a Small-Molecule Structure Corrector\nEfforts to develop drugs for Alzheimer's disease (AD) have shown promise in animal studies, only to fail in human trials, suggesting a pressing need to study AD in human model systems. Using human neurons derived from induced pluripotent stem cells that expressed apolipoprotein E4 (ApoE4), a variant of the APOE gene product and the major genetic risk factor for AD, we demonstrated that ApoE4-expressing neurons had higher levels of tau phosphorylation, unrelated to their increased production of amyloid-β (Aβ) peptides, and that they displayed GABAergic neuron degeneration. ApoE4 increased Aβ production in human, but not in mouse, neurons. Converting ApoE4 to ApoE3 by gene editing rescued these phenotypes, indicating the specific effects of ApoE4. Neurons that lacked APOE behaved similarly to those expressing ApoE3, and the introduction of ApoE4 expression recapitulated the pathological phenotypes, suggesting a gain of toxic effects from ApoE4. Treatment of ApoE4-expressing neurons with a small-molecule structure corrector ameliorated the detrimental effects, thus showing that correcting the pathogenic conformation of ApoE4 is a viable therapeutic approach for ApoE4-related AD.",
+    "goldLabel": "CONTRADICT",
+    "citedDocIds": [
+      4709641
+    ]
+  },
+  {
+    "id": "115",
+    "claim": "Anthrax spores can be disposed of easily after they are dispersed.",
+    "sourceText": "Secondary aerosolization of viable Bacillus anthracis spores in a contaminated US Senate Office.\nCONTEXT Bioterrorist attacks involving letters and mail-handling systems in Washington, DC, resulted in Bacillus anthracis (anthrax) spore contamination in the Hart Senate Office Building and other facilities in the US Capitol's vicinity.   \n OBJECTIVE To provide information about the nature and extent of indoor secondary aerosolization of B anthracis spores.   \n DESIGN Stationary and personal air samples, surface dust, and swab samples were collected under semiquiescent (minimal activities) and then simulated active office conditions to estimate secondary aerosolization of B anthracis spores. Nominal size characteristics, airborne concentrations, and surface contamination of B anthracis particles (colony-forming units) were evaluated.   \n RESULTS Viable B anthracis spores reaerosolized under semiquiescent conditions, with a marked increase in reaerosolization during simulated active office conditions. Increases were observed for B anthracis collected on open sheep blood agar plates (P<.001) and personal air monitors (P =.01) during active office conditions. More than 80% of the B anthracis particles collected on stationary monitors were within an alveolar respirable size range of 0.95 to 3.5 micro m.   CONCLUSIONS Bacillus anthracis spores used in a recent terrorist incident reaerosolized under common office activities. These findings have important implications for appropriate respiratory protection, remediation, and reoccupancy of contaminated office environments.",
+    "goldLabel": "CONTRADICT",
+    "citedDocIds": [
+      33872649
+    ]
+  },
+  {
+    "id": "171",
+    "claim": "Basophils counteract disease development in patients with systemic lupus erythematosus (SLE).",
+    "sourceText": "BASOPHILS AND THE T HELPER 2 ENVIRONMENT CAN PROMOTE THE DEVELOPMENT OF LUPUS NEPHRITIS\nIn systemic lupus erythematosus (SLE), self-reactive antibodies can target the kidney (lupus nephritis), leading to functional failure and possible mortality. We report that activation of basophils by autoreactive IgE causes their homing to lymph nodes, promoting T helper type 2 (T(H)2) cell differentiation and enhancing the production of self-reactive antibodies that cause lupus-like nephritis in mice lacking the Src family protein tyrosine kinase Lyn (Lyn(-/-) mice). Individuals with SLE also have elevated serum IgE, self-reactive IgEs and activated basophils that express CD62 ligand (CD62L) and the major histocompatibility complex (MHC) class II molecule human leukocyte antigen-DR (HLA-DR), parameters that are associated with increased disease activity and active lupus nephritis. Basophils were also present in the lymph nodes and spleen of subjects with SLE. Thus, in Lyn(-/-) mice, basophils and IgE autoantibodies amplify autoantibody production that leads to lupus nephritis, and in individuals with SLE IgE autoantibodies and activated basophils are factors associated with disease activity and nephritis.",
+    "goldLabel": "CONTRADICT",
+    "citedDocIds": [
+      12670680
+    ]
+  },
+  {
+    "id": "180",
+    "claim": "Blocking the interaction between TDP-43 and respiratory complex I proteins ND3 and ND6 leads to increased TDP-43-induced neuronal loss.",
+    "sourceText": "The Inhibition of TDP-43 Mitochondrial Localization Blocks Its Neuronal Toxicity\nGenetic mutations in TAR DNA-binding protein 43 (TARDBP, also known as TDP-43) cause amyotrophic lateral sclerosis (ALS), and an increase in the presence of TDP-43 (encoded by TARDBP) in the cytoplasm is a prominent histopathological feature of degenerating neurons in various neurodegenerative diseases. However, the molecular mechanisms by which TDP-43 contributes to ALS pathophysiology remain elusive. Here we have found that TDP-43 accumulates in the mitochondria of neurons in subjects with ALS or frontotemporal dementia (FTD). Disease-associated mutations increase TDP-43 mitochondrial localization. In mitochondria, wild-type (WT) and mutant TDP-43 preferentially bind mitochondria-transcribed messenger RNAs (mRNAs) encoding respiratory complex I subunits ND3 and ND6, impair their expression and specifically cause complex I disassembly. The suppression of TDP-43 mitochondrial localization abolishes WT and mutant TDP-43-induced mitochondrial dysfunction and neuronal loss, and improves phenotypes of transgenic mutant TDP-43 mice. Thus, our studies link TDP-43 toxicity directly to mitochondrial bioenergetics and propose the targeting of TDP-43 mitochondrial localization as a promising therapeutic approach for neurodegeneration.",
+    "goldLabel": "CONTRADICT",
+    "citedDocIds": [
+      16966326
+    ]
+  },
+  {
+    "id": "183",
+    "claim": "Bone marrow cells contribute to adult macrophage compartments.",
+    "sourceText": "Tissue-resident macrophages self-maintain locally throughout adult life with minimal contribution from circulating monocytes.\nDespite accumulating evidence suggesting local self-maintenance of tissue macrophages in the steady state, the dogma remains that tissue macrophages derive from monocytes. Using parabiosis and fate-mapping approaches, we confirmed that monocytes do not show significant contribution to tissue macrophages in the steady state. Similarly, we found that after depletion of lung macrophages, the majority of repopulation occurred by stochastic cellular proliferation in situ in a macrophage colony-stimulating factor (M-Csf)- and granulocyte macrophage (GM)-CSF-dependent manner but independently of interleukin-4. We also found that after bone marrow transplantation, host macrophages retained the capacity to expand when the development of donor macrophages was compromised. Expansion of host macrophages was functional and prevented the development of alveolar proteinosis in mice transplanted with GM-Csf-receptor-deficient progenitors. Collectively, these results indicate that tissue-resident macrophages and circulating monocytes should be classified as mononuclear phagocyte lineages that are independently maintained in the steady state.",
+    "goldLabel": "CONTRADICT",
+    "citedDocIds": [
+      12827098
+    ]
+  },
+  {
+    "id": "185",
+    "claim": "Breast cancer development is determined exclusively by genetic factors.",
+    "sourceText": "Gene–environment interactions in 7610 women with breast cancer: prospective evidence from the Million Women Study\nBACKGROUND Information is scarce about the combined effects on breast cancer incidence of low-penetrance genetic susceptibility polymorphisms and environmental factors (reproductive, behavioural, and anthropometric risk factors for breast cancer). To test for evidence of gene-environment interactions, we compared genotypic relative risks for breast cancer across the other risk factors in a large UK prospective study.   \n METHODS We tested gene-environment interactions in 7610 women who developed breast cancer and 10 196 controls without the disease, studying the effects of 12 polymorphisms (FGFR2-rs2981582, TNRC9-rs3803662, 2q35-rs13387042, MAP3K1-rs889312, 8q24-rs13281615, 2p-rs4666451, 5p12-rs981782, CASP8-rs1045485, LSP1-rs3817198, 5q-rs30099, TGFB1-rs1982073, and ATM-rs1800054) in relation to prospectively collected information about ten established environmental risk factors (age at menarche, parity, age at first birth, breastfeeding, menopausal status, age at menopause, use of hormone replacement therapy, body-mass index, height, and alcohol consumption).   \n FINDINGS After allowance for multiple testing none of the 120 comparisons yielded significant evidence of a gene-environment interaction. By contrast with previous suggestions, there was little evidence that the genotypic relative risks were affected by use of hormone replacement therapy, either overall or for oestrogen-receptor-positive disease. Only one of the 12 polymorphisms was correlated with any of the ten other risk factors: carriers of the high-risk C allele of MAP3K1-rs889312 were significantly shorter than non-carriers (mean height 162.4 cm [95% CI 162.1-162.7] vs 163.1 cm [162.9-163.2]; p=0.01 after allowance for multiple testing).   \n INTERPRETATION Risks of breast cancer associated with low-penetrance susceptibility polymorphisms do not vary significantly with these ten established environmental risk factors.   \n FUNDING Cancer Research UK and the UK Medical Research Council.",
+    "goldLabel": "CONTRADICT",
+    "citedDocIds": [
+      18340282
+    ]
+  },
+  {
+    "id": "212",
+    "claim": "CR is associated with higher methylation age.",
+    "sourceText": "Caloric restriction delays age-related methylation drift\nIn mammals, caloric restriction consistently results in extended lifespan. Epigenetic information encoded by DNA methylation is tightly regulated, but shows a striking drift associated with age that includes both gains and losses of DNA methylation at various sites. Here, we report that epigenetic drift is conserved across species and the rate of drift correlates with lifespan when comparing mice, rhesus monkeys, and humans. Twenty-two to 30-year-old rhesus monkeys exposed to 30% caloric restriction since 7-14 years of age showed attenuation of age-related methylation drift compared to ad libitum-fed controls such that their blood methylation age appeared 7 years younger than their chronologic age. Even more pronounced effects were seen in 2.7-3.2-year-old mice exposed to 40% caloric restriction starting at 0.3 years of age. The effects of caloric restriction on DNA methylation were detectable across different tissues and correlated with gene expression. We propose that epigenetic drift is a determinant of lifespan in mammals. Caloric restriction has been shown to increase lifespan in mammals. Here, the authors provide evidence that age-related methylation drift correlates with lifespan and that caloric restriction in mice and rhesus monkeys results in attenuation of age-related methylation drift.",
+    "goldLabel": "CONTRADICT",
+    "citedDocIds": [
+      22038539
+    ]
+  },
+  {
+    "id": "216",
+    "claim": "CX3CR1 on the Th2 cells impairs T cell survival",
+    "sourceText": "CX3CR1 is required for airway inflammation by promoting T helper cell survival and maintenance in inflamed lung\nAllergic asthma is a T helper type 2 (T(H)2)-dominated disease of the lung. In people with asthma, a fraction of CD4(+) T cells express the CX3CL1 receptor, CX3CR1, and CX3CL1 expression is increased in airway smooth muscle, lung endothelium and epithelium upon allergen challenge. Here we found that untreated CX3CR1-deficient mice or wild-type (WT) mice treated with CX3CR1-blocking reagents show reduced lung disease upon allergen sensitization and challenge. Transfer of WT CD4(+) T cells into CX3CR1-deficient mice restored the cardinal features of asthma, and CX3CR1-blocking reagents prevented airway inflammation in CX3CR1-deficient recipients injected with WT T(H)2 cells. We found that CX3CR1 signaling promoted T(H)2 survival in the inflamed lungs, and injection of B cell leukemia/lymphoma-2 protein (BCl-2)-transduced CX3CR1-deficient T(H)2 cells into CX3CR1-deficient mice restored asthma. CX3CR1-induced survival was also observed for T(H)1 cells upon airway inflammation but not under homeostatic conditions or upon peripheral inflammation. Therefore, CX3CR1 and CX3CL1 may represent attractive therapeutic targets in asthma.",
+    "goldLabel": "CONTRADICT",
+    "citedDocIds": [
+      21366394
+    ]
+  },
+  {
+    "id": "219",
+    "claim": "CX3CR1 on the Th2 cells suppresses airway inflammation.",
+    "sourceText": "CX3CR1 is required for airway inflammation by promoting T helper cell survival and maintenance in inflamed lung\nAllergic asthma is a T helper type 2 (T(H)2)-dominated disease of the lung. In people with asthma, a fraction of CD4(+) T cells express the CX3CL1 receptor, CX3CR1, and CX3CL1 expression is increased in airway smooth muscle, lung endothelium and epithelium upon allergen challenge. Here we found that untreated CX3CR1-deficient mice or wild-type (WT) mice treated with CX3CR1-blocking reagents show reduced lung disease upon allergen sensitization and challenge. Transfer of WT CD4(+) T cells into CX3CR1-deficient mice restored the cardinal features of asthma, and CX3CR1-blocking reagents prevented airway inflammation in CX3CR1-deficient recipients injected with WT T(H)2 cells. We found that CX3CR1 signaling promoted T(H)2 survival in the inflamed lungs, and injection of B cell leukemia/lymphoma-2 protein (BCl-2)-transduced CX3CR1-deficient T(H)2 cells into CX3CR1-deficient mice restored asthma. CX3CR1-induced survival was also observed for T(H)1 cells upon airway inflammation but not under homeostatic conditions or upon peripheral inflammation. Therefore, CX3CR1 and CX3CL1 may represent attractive therapeutic targets in asthma.",
+    "goldLabel": "CONTRADICT",
+    "citedDocIds": [
+      21366394
+    ]
+  },
+  {
+    "id": "233",
+    "claim": "Cell autonomous sex determination in somatic cells does not occur in Galliformes.",
+    "sourceText": "Somatic sex identity is cell-autonomous in the chicken\nIn the mammalian model of sex determination, embryos are considered to be sexually indifferent until the transient action of a sex-determining gene initiates gonadal differentiation. Although this model is thought to apply to all vertebrates, this has yet to be established. Here we have examined three lateral gynandromorph chickens (a rare, naturally occurring phenomenon in which one side of the animal appears male and the other female) to investigate the sex-determining mechanism in birds. These studies demonstrated that gynandromorph birds are genuine male:female chimaeras, and indicated that male and female avian somatic cells may have an inherent sex identity. To test this hypothesis, we transplanted presumptive mesoderm between embryos of reciprocal sexes to generate embryos containing male:female chimaeric gonads. In contrast to the outcome for mammalian mixed-sex chimaeras, in chicken mixed-sex chimaeras the donor cells were excluded from the functional structures of the host gonad. In an example where female tissue was transplanted into a male host, donor cells contributing to the developing testis retained a female identity and expressed a marker of female function. Our study demonstrates that avian somatic cells possess an inherent sex identity and that, in birds, sexual differentiation is substantively cell autonomous.",
+    "goldLabel": "CONTRADICT",
+    "citedDocIds": [
+      4388470
+    ]
+  },
+  {
+    "id": "249",
+    "claim": "Chenodeosycholic acid treatment reduces whole-body energy expenditure.",
+    "sourceText": "The Bile Acid Chenodeoxycholic Acid Increases Human Brown Adipose Tissue Activity.\nThe interest in brown adipose tissue (BAT) as a target to combat metabolic disease has recently been renewed with the discovery of functional BAT in humans. In rodents, BAT can be activated by bile acids, which activate type 2 iodothyronine deiodinase (D2) in BAT via the G-coupled protein receptor TGR5, resulting in increased oxygen consumption and energy expenditure. Here we examined the effects of oral supplementation of the bile acid chenodeoxycholic acid (CDCA) on human BAT activity. Treatment of 12 healthy female subjects with CDCA for 2 days resulted in increased BAT activity. Whole-body energy expenditure was also increased upon CDCA treatment. In vitro treatment of primary human brown adipocytes derived with CDCA or specific TGR5 agonists increased mitochondrial uncoupling and D2 expression, an effect that was absent in human primary white adipocytes. These findings identify bile acids as a target to activate BAT in humans.",
+    "goldLabel": "CONTRADICT",
+    "citedDocIds": [
+      1568684
+    ]
+  },
+  {
+    "id": "578",
+    "claim": "In mouse models, the loss of CSF1R facilitates MOZ-TIF2-induced leuekmogenesis.",
+    "sourceText": "PU.1-mediated upregulation of CSF1R is crucial for leukemia stem cell potential induced by MOZ-TIF2\nLeukemias and other cancers possess self-renewing stem cells that help to maintain the cancer. Cancer stem cell eradication is thought to be crucial for successful anticancer therapy. Using an acute myeloid leukemia (AML) model induced by the leukemia-associated monocytic leukemia zinc finger (MOZ)-TIF2 fusion protein, we show here that AML can be cured by the ablation of leukemia stem cells. The MOZ fusion proteins MOZ-TIF2 and MOZ-CBP interacted with the transcription factor PU.1 to stimulate the expression of macrophage colony–stimulating factor receptor (CSF1R, also known as M-CSFR, c-FMS or CD115). Studies using PU.1-deficient mice showed that PU.1 is essential for the ability of MOZ-TIF2 to establish and maintain AML stem cells. Cells expressing high amounts of CSF1R (CSF1Rhigh cells), but not those expressing low amounts of CSF1R (CSF1Rlow cells), showed potent leukemia-initiating activity. Using transgenic mice expressing a drug-inducible suicide gene controlled by the CSF1R promoter, we cured AML by ablation of CSF1Rhigh cells. Moreover, induction of AML was suppressed in CSF1R-deficient mice and CSF1R inhibitors slowed the progression of MOZ-TIF2–induced leukemia. Thus, in this subtype of AML, leukemia stem cells are contained within the CSF1Rhigh cell population, and we suggest that targeting of PU.1-mediated upregulation of CSF1R expression might be a useful therapeutic approach.",
+    "goldLabel": "CONTRADICT",
+    "citedDocIds": [
+      8764879
+    ]
+  },
+  {
+    "id": "598",
+    "claim": "Incidence rates of cervical cancer have increased due to nationwide screening programs based primarily on cytology to detect uterine cervical cancer.",
+    "sourceText": "Mass screening programmes and trends in cervical cancer in Finland and the Netherlands.\nWith respect to cervical cancer management, Finland and the Netherlands are comparable in relevant characteristics, e.g., fertility rate, age-of-mother at first birth and a national screening programme for several years. The aim of this study is to compare trends in incidence of and mortality from cervical cancer in Finland and the Netherlands in relation to the introduction and intensity of the screening programmes. Therefore, incidence and mortality rates were calculated using the Cancer Registries of Finland and the Netherlands. Data on screening intensity were obtained from the Finnish Cancer Registry and the Dutch evaluation centre at ErasmusMC-Rotterdam. Women aged 30-60 have been screened every 5 years, in Finland since 1992 and in the Netherlands since 1996. Screening protocols for smear taking and referral to the gynaecologist are comparable. Incidence and mortality rates have declined more in Finland. In 2003, age-adjusted incidence and mortality in Finland were 4.0 and 0.9 and in the Netherlands 4.9 and 1.4 per 100,000 woman-years, respectively. Excess smear use in the Netherlands was estimated to be 24 per 1,000 women during a 5-year interval compared to 121 in Finland. The decline in mortality in Finland seems to be almost completely related to the screening programme whereas in the Netherlands it was initially considered to be a natural decline. Differences in risk factors might also play a role: the Netherlands has higher population density and higher percentages of immigrants and (female) smokers. The greater excess smear use in Finland might also have affected incidence.",
+    "goldLabel": "CONTRADICT",
+    "citedDocIds": [
+      25742130
+    ]
+  },
+  {
+    "id": "718",
+    "claim": "Low nucleosome occupancy correlates with low methylation levels across species.",
+    "sourceText": "Dnmt1-Independent CG Methylation Contributes to Nucleosome Positioning in Diverse Eukaryotes\nDnmt1 epigenetically propagates symmetrical CG methylation in many eukaryotes. Their genomes are typically depleted of CG dinucleotides because of imperfect repair of deaminated methylcytosines. Here, we extensively survey diverse species lacking Dnmt1 and show that, surprisingly, symmetrical CG methylation is nonetheless frequently present and catalyzed by a different DNA methyltransferase family, Dnmt5. Numerous Dnmt5-containing organisms that diverged more than a billion years ago exhibit clustered methylation, specifically in nucleosome linkers. Clustered methylation occurs at unprecedented densities and directly disfavors nucleosomes, contributing to nucleosome positioning between clusters. Dense methylation is enabled by a regime of genomic sequence evolution that enriches CG dinucleotides and drives the highest CG frequencies known. Species with linker methylation have small, transcriptionally active nuclei that approach the physical limits of chromatin compaction. These features constitute a previously unappreciated genome architecture, in which dense methylation influences nucleosome positions, likely facilitating nuclear processes under extreme spatial constraints.",
+    "goldLabel": "CONTRADICT",
+    "citedDocIds": [
+      17587795
+    ]
+  },
+  {
+    "id": "743",
+    "claim": "Macrolides protect against myocardial infarction.",
+    "sourceText": "Antibiotics and risk of subsequent first-time acute myocardial infarction.\nCONTEXT Increasing evidence supports the hypothesis of a causal association between certain bacterial infections and increased risk of developing acute myocardial infarction. If such a causal association exists, subjects who used antibiotics active against the bacteria, regardless of indication, might be at lower risk of developing acute myocardial infarction than nonusers.   \n OBJECTIVE To determine whether previous use of antibiotics decreases the risk of developing a first-time acute myocardial infarction.   \n DESIGN Population-based case-control analysis.   \n SETTING The United Kingdom-based General Practice Research Database comprising 350 general practices.   \n PATIENTS A total of 3315 case patients aged 75 years or younger with a diagnosis of first-time acute myocardial infarction between 1992 and 1997 and 13139 controls without myocardial infarction matched to cases for age, sex, general practice attended, and calendar time.   \n MAIN OUTCOME MEASURES Use of antibiotics among those who did or did not have a first-time acute myocardial infarction.   \n RESULTS Cases were significantly less likely to have used tetracycline antibiotics (adjusted odds ratio [OR], 0.70; 95% confidence interval [CI], 0.55-0.90) or quinolones (adjusted OR, 0.45; 95% CI, 0.21-0.95). No effect was found for previous use of macrolides (primarily erythromycin), sulfonamides, penicillins, or cephalosporins.   \n CONCLUSIONS The findings from this large case-control analysis provide further, albeit indirect, evidence for an association between bacterial infections with organisms susceptible to tetracycline or quinolone antibiotics and the risk of acute myocardial infarction. These results of preliminary nature should stimulate more research to further explore the role of infections in the etiology of acute myocardial infarction.",
+    "goldLabel": "CONTRADICT",
+    "citedDocIds": [
+      32159283
+    ]
+  },
+  {
+    "id": "781",
+    "claim": "Mice that lack Interferon-γ or its receptor exhibit high resistance to experimental autoimmune myocarditis.",
+    "sourceText": "Lethal autoimmune myocarditis in interferon-gamma receptor-deficient mice: enhanced disease severity by impaired inducible nitric oxide synthase induction.\nBACKGROUND Interferon-gamma (IFN-gamma) is an essential cytokine in the regulation of inflammatory responses in autoimmune diseases. Little is known about its role in inflammatory heart disease.   \n METHODS AND RESULTS We showed that IFN-gamma receptor-deficient mice (IFN-gammaR(-/-)) on a BALB/c background immunized with a peptide derived from cardiac alpha-myosin heavy chain develop severe myocarditis with high mortality. Although myocarditis subsided in wild-type mice after 3 weeks, IFN-gammaR(-/-) mice showed persistent disease. The persistent inflammation was accompanied by vigorous in vitro CD4 T-cell responses and impaired inducible nitric oxide synthase expression, together with evidence of impaired nitric oxide production in IFN-gammaR(-/-) hearts. Treatment of wild-type mice with the nitric oxide synthetase inhibitor N:-nitro-l-arginine-methyl-ester enhanced in vitro CD4 T-cell proliferation and prevented healing of myocarditis.   \n CONCLUSIONS Our data provide evidence that IFN-gamma protects mice from lethal autoimmune myocarditis by inducing the expression of inducible nitric oxide synthase followed by the downregulation of T-cell responses.",
+    "goldLabel": "CONTRADICT",
+    "citedDocIds": [
+      24338780
+    ]
+  },
+  {
+    "id": "793",
+    "claim": "Mitochondria are uninvolved in apoptosis.",
+    "sourceText": "Mitochondria: Dynamic Organelles in Disease, Aging, and Development\nMitochondria are the primary energy-generating system in most eukaryotic cells. Additionally, they participate in intermediary metabolism, calcium signaling, and apoptosis. Given these well-established functions, it might be expected that mitochondrial dysfunction would give rise to a simple and predictable set of defects in all tissues. However, mitochondrial dysfunction has pleiotropic effects in multicellular organisms. Clearly, much about the basic biology of mitochondria remains to be understood. Here we discuss recent work that suggests that the dynamics (fusion and fission) of these organelles is important in development and disease.",
+    "goldLabel": "CONTRADICT",
+    "citedDocIds": [
+      8551160
+    ]
+  },
+  {
+    "id": "1",
+    "claim": "0-dimensional biomaterials show inductive properties.",
+    "sourceText": "New opportunities: the use of nanotechnologies to manipulate and track stem cells.\nNanotechnologies are emerging platforms that could be useful in measuring, understanding, and manipulating stem cells. Examples include magnetic nanoparticles and quantum dots for stem cell labeling and in vivo tracking; nanoparticles, carbon nanotubes, and polyplexes for the intracellular delivery of genes/oligonucleotides and protein/peptides; and engineered nanometer-scale scaffolds for stem cell differentiation and transplantation. This review examines the use of nanotechnologies for stem cell tracking, differentiation, and transplantation. We further discuss their utility and the potential concerns regarding their cytotoxicity.",
+    "goldLabel": "NEI",
+    "citedDocIds": [
+      31715818
+    ]
+  },
+  {
+    "id": "72",
+    "claim": "Activator-inhibitor pairs are provided dorsally by Admpchordin.",
+    "sourceText": "Regulation of ADMP and BMP2/4/7 at Opposite Embryonic Poles Generates a Self-Regulating Morphogenetic Field\nEmbryos have the ability to self-regulate and regenerate normal structures after being sectioned in half. How is such a morphogenetic field established? We discovered that quadruple knockdown of ADMP and BMP2/4/7 in Xenopus embryos eliminates self-regulation, causing ubiquitous neural induction throughout the ectoderm. ADMP transcription in the Spemann organizer is activated at low BMP levels. When ventral BMP2/4/7 signals are depleted, Admp expression increases, allowing for self-regulation. ADMP has BMP-like activity and signals via the ALK-2 receptor. It is unable to signal dorsally because of inhibition by Chordin. The ventral BMP antagonists Sizzled and Bambi further refine the pattern. By transplanting dorsal or ventral wild-type grafts into ADMP/BMP2/4/7-depleted hosts, we demonstrate that both poles serve as signaling centers that can induce histotypic differentiation over considerable distances. We conclude that dorsal and ventral BMP signals and their extracellular antagonists expressed under opposing transcriptional regulation provide a molecular mechanism for embryonic self-regulation.",
+    "goldLabel": "NEI",
+    "citedDocIds": [
+      6076903
+    ]
+  },
+  {
+    "id": "75",
+    "claim": "Active H. pylori urease has a polymeric structure that compromises two subunits, UreA and UreB.",
+    "sourceText": "Structure of the proton-gated urea channel from the gastric pathogen Helicobacter pylori\nHalf the world's population is chronically infected with Helicobacter pylori, causing gastritis, gastric ulcers and an increased incidence of gastric adenocarcinoma. Its proton-gated inner-membrane urea channel, HpUreI, is essential for survival in the acidic environment of the stomach. The channel is closed at neutral pH and opens at acidic pH to allow the rapid access of urea to cytoplasmic urease. Urease produces NH(3) and CO(2), neutralizing entering protons and thus buffering the periplasm to a pH of roughly 6.1 even in gastric juice at a pH below 2.0. Here we report the structure of HpUreI, revealing six protomers assembled in a hexameric ring surrounding a central bilayer plug of ordered lipids. Each protomer encloses a channel formed by a twisted bundle of six transmembrane helices. The bundle defines a previously unobserved fold comprising a two-helix hairpin motif repeated three times around the central axis of the channel, without the inverted repeat of mammalian-type urea transporters. Both the channel and the protomer interface contain residues conserved in the AmiS/UreI superfamily, suggesting the preservation of channel architecture and oligomeric state in this superfamily. Predominantly aromatic or aliphatic side chains line the entire channel and define two consecutive constriction sites in the middle of the channel. Mutation of Trp 153 in the cytoplasmic constriction site to Ala or Phe decreases the selectivity for urea in comparison with thiourea, suggesting that solute interaction with Trp 153 contributes specificity. The previously unobserved hexameric channel structure described here provides a new model for the permeation of urea and other small amide solutes in prokaryotes and archaea.",
+    "goldLabel": "NEI",
+    "citedDocIds": [
+      4387784
+    ]
+  },
+  {
+    "id": "94",
+    "claim": "Albendazole is used to treat lymphatic filariasis.",
+    "sourceText": "“Rapid-Impact Interventions”: How a Policy of Integrated Control for Africa's Neglected Tropical Diseases Could Benefit the Poor\nOver the past two decades there have been significant achievements in the control of a handful of important human tropical infections [1]. These achievements include the substantive reductions in the prevalence and incidence of the so-called neglected diseases such as lymphatic filariasis, onchocerciasis, guinea worm, leprosy, and trachoma (Box 1) [2].                 Each of these neglected diseases is a poverty-promoting and often stigmatizing condition occurring primarily in rural areas of low-income countries (Box 2) [3]. They are ancient afflictions, described in the Bible and other ancient texts, which have burdened humanity for millennia [3]. But now, as a result of aggressive regional vertical interventions, there is a possibility that some neglected tropical infections could be eventually controlled to the point of elimination in some areas of endemicity [2–8]. In the case of guinea worm infection, disease eradication might also soon be possible [9].       Box 2. Common Features of the Neglected Tropical Diseases          Ancient afflictions that have burdened humanity for centuries      Poverty-promoting conditions      Associated with stigma      Rural areas of low-income countries and fragile states      No commercial markets for products that target these diseases      Interventions, when applied, have a history of success",
+    "goldLabel": "NEI",
+    "citedDocIds": [
+      1215116
+    ]
+  },
+  {
+    "id": "99",
+    "claim": "Alizarin forms hydrogen bonds with residues involved in PGAM1 substrate binding.",
+    "sourceText": "Tyr26 phosphorylation of PGAM1 provides a metabolic advantage to tumours by stabilizing the active conformation\nHow oncogenic signalling coordinates glycolysis and anabolic biosynthesis in cancer cells remains unclear. We recently reported that the glycolytic enzyme phosphoglycerate mutase 1 (PGAM1) regulates anabolic biosynthesis by controlling intracellular levels of its substrate 3-phosphoglycerate and product 2-phosphoglycerate. Here we report a novel mechanism in which Y26 phosphorylation enhances PGAM1 activation through release of inhibitory E19 that blocks the active site, stabilising cofactor 2,3-bisphosphoglycerate binding and H11 phosphorylation. We also report the crystal structure of H11-phosphorylated PGAM1 and find that phospho-H11 activates PGAM1 at least in part by promoting substrate 3-phosphoglycerate binding. Moreover, Y26 phosphorylation of PGAM1 is common in human cancer cells and contributes to regulation of 3-phosphoglycerate and 2-phosphoglycerate levels, promoting cancer cell proliferation and tumour growth. As PGAM1 is a negative transcriptional target of TP53, and is therefore commonly upregulated in human cancers, these findings suggest that Y26 phosphorylation represents an additional acute mechanism underlying phosphoglycerate mutase 1 upregulation.",
+    "goldLabel": "NEI",
+    "citedDocIds": [
+      18810195
+    ]
+  },
+  {
+    "id": "127",
+    "claim": "Arginine 90 in p150n is important for interaction with EB1.",
+    "sourceText": "Structural basis for the activation of microtubule assembly by the EB1 and p150Glued complex.\nPlus-end tracking proteins, such as EB1 and the dynein/dynactin complex, regulate microtubule dynamics. These proteins are thought to stabilize microtubules by forming a plus-end complex at microtubule growing ends with ill-defined mechanisms. Here we report the crystal structure of two plus-end complex components, the carboxy-terminal dimerization domain of EB1 and the microtubule binding (CAP-Gly) domain of the dynactin subunit p150Glued. Each molecule of the EB1 dimer contains two helices forming a conserved four-helix bundle, while also providing p150Glued binding sites in its flexible tail region. Combining crystallography, NMR, and mutational analyses, our studies reveal the critical interacting elements of both EB1 and p150Glued, whose mutation alters microtubule polymerization activity. Moreover, removal of the key flexible tail from EB1 activates microtubule assembly by EB1 alone, suggesting that the flexible tail negatively regulates EB1 activity. We, therefore, propose that EB1 possesses an auto-inhibited conformation, which is relieved by p150Glued as an allosteric activator.",
+    "goldLabel": "NEI",
+    "citedDocIds": [
+      21598000
+    ]
+  },
+  {
+    "id": "128",
+    "claim": "Arterioles have a larger lumen diameter than venules.",
+    "sourceText": "Scaffold-based three-dimensional human fibroblast culture provides a structural matrix that supports angiogenesis in infarcted heart tissue.\nBACKGROUND We have developed techniques to implant angiogenic patches onto the epicardium over regions of infarcted cardiac tissue to stimulate revascularization of the damaged tissue. These experiments used a scaffold-based 3D human dermal fibroblast culture (3DFC) as an epicardial patch. The 3DFC contains viable cells that secrete angiogenic growth factors and has previously been shown to stimulate angiogenic activity. The hypothesis tested was that a viable 3DFC cardiac patch would stimulate an angiogenic response within an area of infarcted cardiac tissue.   \n METHODS AND RESULTS A coronary occlusion of a branch of the left anterior descending coronary artery was performed by thermal ligation in severe combined immunodeficient mice. 3DFCs with or without viable cells were sized to the damaged area, implanted in replicate mice onto the epicardium at the site of tissue injury, and compared with animals that received infarct surgery but no implant. Fourteen and 30 days after surgery, hearts were exposed and photographed, and tissue samples were prepared for histology and cytochemistry. Fourteen and 30 days after surgery, the damaged myocardium receiving viable 3DFC exhibited a significantly greater angiogenic response (including arterioles, venules, and capillaries) than nonviable and untreated control groups.   \n CONCLUSIONS In this animal model, viable 3DFC stimulates angiogenesis within a region of cardiac infarction and can augment a repair response in damaged tissue. Therefore, a potential use for 3DFC is the repair of myocardial tissue damaged by infarction.",
+    "goldLabel": "NEI",
+    "citedDocIds": [
+      8290953
+    ]
+  },
+  {
+    "id": "132",
+    "claim": "Aspirin inhibits the production of PGE2.",
+    "sourceText": "Cyclooxygenase-Dependent Tumor Growth through Evasion of Immunity\nThe mechanisms by which melanoma and other cancer cells evade anti-tumor immunity remain incompletely understood. Here, we show that the growth of tumors formed by mutant Braf(V600E) mouse melanoma cells in an immunocompetent host requires their production of prostaglandin E2, which suppresses immunity and fuels tumor-promoting inflammation. Genetic ablation of cyclooxygenases (COX) or prostaglandin E synthases in Braf(V600E) mouse melanoma cells, as well as in Nras(G12D) melanoma or in breast or colorectal cancer cells, renders them susceptible to immune control and provokes a shift in the tumor inflammatory profile toward classic anti-cancer immune pathways. This mouse COX-dependent inflammatory signature is remarkably conserved in human cutaneous melanoma biopsies, arguing for COX activity as a driver of immune suppression across species. Pre-clinical data demonstrate that inhibition of COX synergizes with anti-PD-1 blockade in inducing eradication of tumors, implying that COX inhibitors could be useful adjuvants for immune-based therapies in cancer patients.",
+    "goldLabel": "NEI",
+    "citedDocIds": [
+      7975937
+    ]
+  },
+  {
+    "id": "198",
+    "claim": "CCL19 is absent within dLNs.",
+    "sourceText": "Immobilized chemokine fields and soluble chemokine gradients cooperatively shape migration patterns of dendritic cells.\nChemokines orchestrate immune cell trafficking by eliciting either directed or random migration and by activating integrins in order to induce cell adhesion. Analyzing dendritic cell (DC) migration, we showed that these distinct cellular responses depended on the mode of chemokine presentation within tissues. The surface-immobilized form of the chemokine CCL21, the heparan sulfate-anchoring ligand of the CC-chemokine receptor 7 (CCR7), caused random movement of DCs that was confined to the chemokine-presenting surface because it triggered integrin-mediated adhesion. Upon direct contact with CCL21, DCs truncated the anchoring residues of CCL21, thereby releasing it from the solid phase. Soluble CCL21 functionally resembles the second CCR7 ligand, CCL19, which lacks anchoring residues and forms soluble gradients. Both soluble CCR7 ligands triggered chemotactic movement, but not surface adhesion. Adhesive random migration and directional steering cooperate to produce dynamic but spatially restricted locomotion patterns closely resembling the cellular dynamics observed in secondary lymphoid organs.",
+    "goldLabel": "NEI",
+    "citedDocIds": [
+      2177022
+    ]
+  },
+  {
+    "id": "232",
+    "claim": "Cataract and trachoma are the primary cause of blindness in Southern Sudan.",
+    "sourceText": "Prevalence and Causes of Blindness and Low Vision in Southern Sudan \nBackground Blindness and low vision are thought to be common in southern Sudan. However, the magnitude and geographical distribution are largely unknown. We aimed to estimate the prevalence of blindness and low vision, identify the main causes of blindness and low vision, and estimate targets for blindness prevention programs in Mankien payam (district), southern Sudan.",
+    "goldLabel": "NEI",
+    "citedDocIds": [
+      10536636
+    ]
+  },
+  {
+    "id": "237",
+    "claim": "Cells lacking clpC have a defect in sporulation efficiency in Bacillus subtilis.",
+    "sourceText": "High-Throughput Genetic Screens Identify a Large and Diverse Collection of New Sporulation Genes in Bacillus subtilis\nThe differentiation of the bacterium Bacillus subtilis into a dormant spore is among the most well-characterized developmental pathways in biology. Classical genetic screens performed over the past half century identified scores of factors involved in every step of this morphological process. More recently, transcriptional profiling uncovered additional sporulation-induced genes required for successful spore development. Here, we used transposon-sequencing (Tn-seq) to assess whether there were any sporulation genes left to be discovered. Our screen identified 133 out of the 148 genes with known sporulation defects. Surprisingly, we discovered 24 additional genes that had not been previously implicated in spore formation. To investigate their functions, we used fluorescence microscopy to survey early, middle, and late stages of differentiation of null mutants from the B. subtilis ordered knockout collection. This analysis identified mutants that are delayed in the initiation of sporulation, defective in membrane remodeling, and impaired in spore maturation. Several mutants had novel sporulation phenotypes. We performed in-depth characterization of two new factors that participate in cell-cell signaling pathways during sporulation. One (SpoIIT) functions in the activation of σE in the mother cell; the other (SpoIIIL) is required for σG activity in the forespore. Our analysis also revealed that as many as 36 sporulation-induced genes with no previously reported mutant phenotypes are required for timely spore maturation. Finally, we discovered a large set of transposon insertions that trigger premature initiation of sporulation. Our results highlight the power of Tn-seq for the discovery of new genes and novel pathways in sporulation and, combined with the recently completed null mutant collection, open the door for similar screens in other, less well-characterized processes.",
+    "goldLabel": "NEI",
+    "citedDocIds": [
+      4942718
+    ]
+  },
+  {
+    "id": "238",
+    "claim": "Cells undergoing methionine restriction may activate miRNAs.",
+    "sourceText": "microRNAs: A Safeguard against Turmoil?\nEmerging data suggest that microRNAs (miRNAs) are instrumental in a variety of stress responses in addition to their more recognized role in development. Surprisingly, miRNAs, which normally suppress expression of target transcripts, may become activators of expression during stress. This might be partially explained by new interactions of miRNA/Argonaute complexes with RNA-binding proteins that relocate from different subcellular compartments during stress.",
+    "goldLabel": "NEI",
+    "citedDocIds": [
+      2251426
+    ]
+  },
+  {
+    "id": "268",
+    "claim": "Cold exposure increases BAT recruitment.",
+    "sourceText": "Cold Exposure Promotes Atherosclerotic Plaque Growth and Instability via UCP1-Dependent Lipolysis\nMolecular mechanisms underlying the cold-associated high cardiovascular risk remain unknown. Here, we show that the cold-triggered food-intake-independent lipolysis significantly increased plasma levels of small low-density lipoprotein (LDL) remnants, leading to accelerated development of atherosclerotic lesions in mice. In two genetic mouse knockout models (apolipoprotein E(-/-) [ApoE(-/-)] and LDL receptor(-/-) [Ldlr(-/-)] mice), persistent cold exposure stimulated atherosclerotic plaque growth by increasing lipid deposition. Furthermore, marked increase of inflammatory cells and plaque-associated microvessels were detected in the cold-acclimated ApoE(-/-) and Ldlr(-/-) mice, leading to plaque instability. Deletion of uncoupling protein 1 (UCP1), a key mitochondrial protein involved in thermogenesis in brown adipose tissue (BAT), in the ApoE(-/-) strain completely protected mice from the cold-induced atherosclerotic lesions. Cold acclimation markedly reduced plasma levels of adiponectin, and systemic delivery of adiponectin protected ApoE(-/-) mice from plaque development. These findings provide mechanistic insights on low-temperature-associated cardiovascular risks.",
+    "goldLabel": "NEI",
+    "citedDocIds": [
+      970012
+    ]
+  },
+  {
+    "id": "269",
+    "claim": "Cold exposure reduces BAT recruitment.",
+    "sourceText": "Cold Exposure Promotes Atherosclerotic Plaque Growth and Instability via UCP1-Dependent Lipolysis\nMolecular mechanisms underlying the cold-associated high cardiovascular risk remain unknown. Here, we show that the cold-triggered food-intake-independent lipolysis significantly increased plasma levels of small low-density lipoprotein (LDL) remnants, leading to accelerated development of atherosclerotic lesions in mice. In two genetic mouse knockout models (apolipoprotein E(-/-) [ApoE(-/-)] and LDL receptor(-/-) [Ldlr(-/-)] mice), persistent cold exposure stimulated atherosclerotic plaque growth by increasing lipid deposition. Furthermore, marked increase of inflammatory cells and plaque-associated microvessels were detected in the cold-acclimated ApoE(-/-) and Ldlr(-/-) mice, leading to plaque instability. Deletion of uncoupling protein 1 (UCP1), a key mitochondrial protein involved in thermogenesis in brown adipose tissue (BAT), in the ApoE(-/-) strain completely protected mice from the cold-induced atherosclerotic lesions. Cold acclimation markedly reduced plasma levels of adiponectin, and systemic delivery of adiponectin protected ApoE(-/-) mice from plaque development. These findings provide mechanistic insights on low-temperature-associated cardiovascular risks.",
+    "goldLabel": "NEI",
+    "citedDocIds": [
+      970012
+    ]
+  },
+  {
+    "id": "294",
+    "claim": "Crossover hot spots are not found within gene promoters in Saccharomyces cerevisiae.",
+    "sourceText": "Mapping Meiotic Single-Strand DNA Reveals a New Landscape of DNA Double-Strand Breaks in Saccharomyces cerevisiae\nDNA double-strand breaks (DSBs), which are formed by the Spo11 protein, initiate meiotic recombination. Previous DSB-mapping studies have used rad50S or sae2Δ mutants, which are defective in break processing, to accumulate Spo11-linked DSBs, and report large (≥ 50 kb) “DSB-hot” regions that are separated by “DSB-cold” domains of similar size. Substantial recombination occurs in some DSB-cold regions, suggesting that DSB patterns are not normal in rad50S or sae2Δ mutants. We therefore developed a novel method to map genome-wide, single-strand DNA (ssDNA)–associated DSBs that accumulate in processing-capable, repair-defective dmc1Δ and dmc1Δ rad51Δ mutants. DSBs were observed at known hot spots, but also in most previously identified “DSB-cold” regions, including near centromeres and telomeres. Although approximately 40% of the genome is DSB-cold in rad50S mutants, analysis of meiotic ssDNA from dmc1Δ shows that most of these regions have substantial DSB activity. Southern blot assays of DSBs in selected regions in dmc1Δ, rad50S, and wild-type cells confirm these findings. Thus, DSBs are distributed much more uniformly than was previously believed. Comparisons of DSB signals in dmc1, dmc1 rad51, and dmc1 spo11 mutant strains identify Dmc1 as a critical strand-exchange activity genome-wide, and confirm previous conclusions that Spo11-induced lesions initiate all meiotic recombination.",
+    "goldLabel": "NEI",
+    "citedDocIds": [
+      10874408
+    ]
+  },
+  {
+    "id": "300",
+    "claim": "Cytosolic proteins bind to iron-responsive elements on mRNAs coding for DMT1. Cytosolic proteins bind to iron-responsive elements on mRNAs coding for proteins involved in iron uptake.",
+    "sourceText": "Mitochondrial iron chelation ameliorates cigarette-smoke induced bronchitis and emphysema in mice\nChronic obstructive pulmonary disease (COPD) is linked to both cigarette smoking and genetic determinants. We have previously identified iron-responsive element-binding protein 2 (IRP2) as an important COPD susceptibility gene and have shown that IRP2 protein is increased in the lungs of individuals with COPD. Here we demonstrate that mice deficient in Irp2 were protected from cigarette smoke (CS)-induced experimental COPD. By integrating RNA immunoprecipitation followed by sequencing (RIP-seq), RNA sequencing (RNA-seq), and gene expression and functional enrichment clustering analysis, we identified Irp2 as a regulator of mitochondrial function in the lungs of mice. Irp2 increased mitochondrial iron loading and levels of cytochrome c oxidase (COX), which led to mitochondrial dysfunction and subsequent experimental COPD. Frataxin-deficient mice, which had higher mitochondrial iron loading, showed impaired airway mucociliary clearance (MCC) and higher pulmonary inflammation at baseline, whereas mice deficient in the synthesis of cytochrome c oxidase, which have reduced COX, were protected from CS-induced pulmonary inflammation and impairment of MCC. Mice treated with a mitochondrial iron chelator or mice fed a low-iron diet were protected from CS-induced COPD. Mitochondrial iron chelation also alleviated CS-induced impairment of MCC, CS-induced pulmonary inflammation and CS-associated lung injury in mice with established COPD, suggesting a critical functional role and potential therapeutic intervention for the mitochondrial-iron axis in COPD.",
+    "goldLabel": "NEI",
+    "citedDocIds": [
+      3553087
+    ]
+  },
+  {
+    "id": "303",
+    "claim": "DMRT1 is a sex-determining gene that is epigenetically regulated by the MHM region.",
+    "sourceText": "Somatic sex identity is cell-autonomous in the chicken\nIn the mammalian model of sex determination, embryos are considered to be sexually indifferent until the transient action of a sex-determining gene initiates gonadal differentiation. Although this model is thought to apply to all vertebrates, this has yet to be established. Here we have examined three lateral gynandromorph chickens (a rare, naturally occurring phenomenon in which one side of the animal appears male and the other female) to investigate the sex-determining mechanism in birds. These studies demonstrated that gynandromorph birds are genuine male:female chimaeras, and indicated that male and female avian somatic cells may have an inherent sex identity. To test this hypothesis, we transplanted presumptive mesoderm between embryos of reciprocal sexes to generate embryos containing male:female chimaeric gonads. In contrast to the outcome for mammalian mixed-sex chimaeras, in chicken mixed-sex chimaeras the donor cells were excluded from the functional structures of the host gonad. In an example where female tissue was transplanted into a male host, donor cells contributing to the developing testis retained a female identity and expressed a marker of female function. Our study demonstrates that avian somatic cells possess an inherent sex identity and that, in birds, sexual differentiation is substantively cell autonomous.",
+    "goldLabel": "NEI",
+    "citedDocIds": [
+      4388470
+    ]
+  },
+  {
+    "id": "324",
+    "claim": "Deleting Raptor reduces G-CSF levels.",
+    "sourceText": "Oncogenic mTOR signaling recruits myeloid-derived suppressor cells to promote tumor initiation\nMyeloid-derived suppressor cells (MDSCs) play critical roles in primary and metastatic cancer progression. MDSC regulation is widely variable even among patients harbouring the same type of malignancy, and the mechanisms governing such heterogeneity are largely unknown. Here, integrating human tumour genomics and syngeneic mammary tumour models, we demonstrate that mTOR signalling in cancer cells dictates a mammary tumour's ability to stimulate MDSC accumulation through regulating G-CSF. Inhibiting this pathway or its activators (for example, FGFR) impairs tumour progression, which is partially rescued by restoring MDSCs or G-CSF. Tumour-initiating cells (TICs) exhibit elevated G-CSF. MDSCs reciprocally increase TIC frequency through activating Notch in tumour cells, forming a feedforward loop. Analyses of primary breast cancers and patient-derived xenografts corroborate these mechanisms in patients. These findings establish a non-canonical oncogenic role of mTOR signalling in recruiting pro-tumorigenic MDSCs and show how defined cancer subsets may evolve to promote and depend on a distinct immune microenvironment.",
+    "goldLabel": "NEI",
+    "citedDocIds": [
+      2014909
+    ]
+  },
+  {
+    "id": "350",
+    "claim": "Discrimination between the initiator and elongation tRNAs depends on the translation initiation factor IF3.",
+    "sourceText": "Large-Scale Movements of IF3 and tRNA during Bacterial Translation Initiation\nIn bacterial translational initiation, three initiation factors (IFs 1-3) enable the selection of initiator tRNA and the start codon in the P site of the 30S ribosomal subunit. Here, we report 11 single-particle cryo-electron microscopy (cryoEM) reconstructions of the complex of bacterial 30S subunit with initiator tRNA, mRNA, and IFs 1-3, representing different steps along the initiation pathway. IF1 provides key anchoring points for IF2 and IF3, thereby enhancing their activities. IF2 positions a domain in an extended conformation appropriate for capturing the formylmethionyl moiety charged on tRNA. IF3 and tRNA undergo large conformational changes to facilitate the accommodation of the formylmethionyl-tRNA (fMet-tRNA(fMet)) into the P site for start codon recognition.",
+    "goldLabel": "NEI",
+    "citedDocIds": [
+      16927286
+    ]
+  },
+  {
+    "id": "354",
+    "claim": "Downregulation and mislocalization of Scribble prevents cell transformation and mammary tumorigenesis.",
+    "sourceText": "Deregulation of Scribble Promotes Mammary Tumorigenesis and Reveals a Role for Cell Polarity in Carcinoma\nLoss of cell polarity proteins such as Scribble induces neoplasia in Drosophila by promoting uncontrolled proliferation. In mammals, the role that polarity proteins play during tumorigenesis is not well understood. Here, we demonstrate that depletion of Scribble in mammary epithelia disrupts cell polarity, blocks three-dimensional morphogenesis, inhibits apoptosis, and induces dysplasia in vivo that progress to tumors after long latency. Loss of Scribble cooperates with oncogenes such as c-myc to transform epithelial cells and induce tumors in vivo by blocking activation of an apoptosis pathway. Like depletion, mislocalization of Scribble from cell-cell junction was sufficient to promote cell transformation. Interestingly, spontaneous mammary tumors in mice and humans possess both downregulated and mislocalized Scribble. Thus, we demonstrate that scribble inhibits breast cancer formation and that deregulation of polarity pathways promotes dysplastic and neoplastic growth in mammals by disrupting morphogenesis and inhibiting cell death.",
+    "goldLabel": "NEI",
+    "citedDocIds": [
+      8774475
+    ]
+  }
+]

@@ -10,6 +10,8 @@ import { TrialResultAnalysis } from "@/lib/sources/clinicaltrials";
 import { parseSourceId } from "@/lib/sourceId";
 import { getMockVerifyResponse } from "@/lib/mockData";
 import { logEvent } from "@/lib/logger";
+import { sanitizeClaimText } from "@/lib/api/claimInput";
+import { buildEvidenceCertainty } from "@/lib/verify/evidenceCertainty";
 
 export const runtime = "nodejs";
 
@@ -38,16 +40,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
   }
 
-  const claim = body.claim?.trim();
-  if (!claim || claim.length < 10) {
+  // Character-quality hardening (control chars, invisible/bidi smuggling, degenerate
+  // repetition) plus the max-length cap. `claim` becomes the cleaned string. Min
+  // length stays a separate check to preserve the existing user-facing message.
+  const sanitized = sanitizeClaimText(body.claim, {
+    maxLength: 2000,
+    tooLongError:
+      "Claim is too long (max 2000 characters). Paste a single sentence or short passage.",
+  });
+  if (!sanitized.ok) {
+    return NextResponse.json({ error: sanitized.error }, { status: 400 });
+  }
+  const claim = sanitized.value;
+  if (claim.length < 10) {
     return NextResponse.json(
       { error: "Please provide a claim of at least 10 characters." },
-      { status: 400 }
-    );
-  }
-  if (claim.length > 2000) {
-    return NextResponse.json(
-      { error: "Claim is too long (max 2000 characters). Paste a single sentence or short passage." },
       { status: 400 }
     );
   }
@@ -142,6 +149,20 @@ export async function POST(req: NextRequest) {
       console.error("[/api/verify] persistence failed (result still returned):", persistErr);
     }
 
+    // OPTIONAL, strictly ADDITIVE enrichment: when two or more retrieved sources
+    // carry a poolable registered PRIMARY ratio result, pool them deterministically
+    // (metaAnalyze) and rate the pooled body of evidence with GRADE. It reads only
+    // the cross-source registered results (ground truth), never the LLM findings,
+    // and is fully isolated: any failure omits the field rather than breaking the
+    // core verify response. Returns null (field omitted) when < 2 sources poolable.
+    let evidenceCertainty = null;
+    try {
+      evidenceCertainty = buildEvidenceCertainty(sources);
+    } catch (certErr) {
+      logEvent("verify.evidence_certainty_error", { error: String(certErr) });
+      evidenceCertainty = null;
+    }
+
     logEvent("verify.success", {
       latencyMs: Date.now() - start,
       discrepancyType: verification.discrepancy_type,
@@ -151,6 +172,7 @@ export async function POST(req: NextRequest) {
       crossSourceAgreement: verification.cross_source_agreement,
       corroboratingCount: corroboratingSources.length,
       registryVerdict: registryCheck?.verdict ?? "n/a",
+      evidenceCertainty: evidenceCertainty?.certainty ?? "n/a",
       persisted: verificationId !== null,
     });
 
@@ -181,6 +203,9 @@ export async function POST(req: NextRequest) {
       verification,
       effect_size_check: effectSizeCheck,
       registry_check: registryCheck,
+      // Additive: present ONLY when >= 2 sources contributed a poolable registered
+      // primary ratio result; omitted otherwise. Never replaces existing fields.
+      ...(evidenceCertainty ? { evidence_certainty: evidenceCertainty } : {}),
     });
   } catch (err) {
     logEvent("verify.error", { latencyMs: Date.now() - start, error: String(err) });

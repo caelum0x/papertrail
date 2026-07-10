@@ -1,0 +1,439 @@
+from pathlib import Path
+
+import pandas as pd
+import pytest
+from scipy.sparse import csr_matrix
+
+import asreview as asr
+from asreview.data.record import Record
+
+TEST_LABELS = [1, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0]
+TEST_RECORD_IDS = [
+    69,
+    95,
+    72,
+    79,
+    49,
+    58,
+    7,
+    19,
+    39,
+    89,
+    29,
+    59,
+    47,
+    57,
+    18,
+    88,
+    9,
+    65,
+    8,
+    42,
+    84,
+    4,
+    32,
+]
+TEST_RECORD_TABLE = list(range(851))
+
+TEST_NOTES = [
+    None,
+    None,
+    None,
+    "random text",
+    "another random text",
+    None,
+    None,
+    "A final random text",
+    None,
+    None,
+]
+
+TEST_N_PRIORS = 0
+
+TEST_POOL_START = [157, 301, 536, 567, 416, 171, 659, 335, 329, 428]
+
+
+@pytest.fixture
+def project(tmpdir):
+    project_path = Path(tmpdir, "test.asreview")
+    return asr.Project.create(project_path)
+
+
+@pytest.fixture
+def project_with_records(project):
+    project.db.input.add_records(
+        [Record(i, "foo") for i in range(len(TEST_RECORD_TABLE))]
+    )
+    return project
+
+
+def test_print_db(asreview_test_project):
+    with asreview_test_project.db as db:
+        print(db)
+
+
+def test_get_results_type(asreview_test_project):
+    with asreview_test_project.db as db:
+        assert isinstance(db.get_results_table(["querier"]), pd.DataFrame)
+        assert isinstance(db.get_results_table(), pd.DataFrame)
+
+
+def test_get_dataset_drop_prior(asreview_test_project):
+    with asreview_test_project.db as db:
+        assert (
+            len(db.get_results_table(priors=False))
+            == len(TEST_RECORD_IDS) - TEST_N_PRIORS
+        )
+        assert (db.get_results_table(priors=False)["querier"].notnull()).all()
+        assert "querier" in db.get_results_table(priors=False).columns
+        assert "querier" not in db.get_results_table("label", priors=False)
+
+
+def test_get_dataset_drop_pending(project):
+    test_ranking = range(9, -1, -1)
+    with project.db as db:
+        db.input.add_records([Record(i, "foo") for i in range(10)])
+        db.add_last_ranking(test_ranking, "nb", "max", "balanced", "tfidf", 4)
+        db.label_record(4, 1)
+        db.label_record(5, 0)
+        db.label_record(6, 1)
+        db.query_top_ranked(3)
+
+        assert "label" in db.get_results_table(pending=False).columns
+        assert "label" not in db.get_results_table("balancer", pending=False)
+        assert len(db.get_results_table(pending=False)) == 3
+        assert db.get_results_table(pending=False)["label"].notna().all()
+
+
+def test_get_results_record(asreview_test_project):
+    with asreview_test_project.db as db:
+        for idx in [2, 6, 8]:
+            record_id = TEST_RECORD_IDS[idx]
+            query = db.get_results_record(record_id)
+            assert isinstance(query, pd.DataFrame)
+
+            assert query["label"][0] == TEST_LABELS[idx]
+            assert query["record_id"][0] == TEST_RECORD_IDS[idx]
+
+
+def test_get_query_strategies(asreview_test_project):
+    with asreview_test_project.db as db:
+        assert (db.get_results_table()["querier"].loc[:2] == "random").all()
+        assert (db.get_results_table()["querier"].loc[3:] == "max").all()
+
+
+def test_get_classifiers(asreview_test_project):
+    with asreview_test_project.db as db:
+        assert db.get_results_table()["classifier"].loc[:2].isnull().all()
+        assert (db.get_results_table()["classifier"].loc[3:] == "svm").all()
+
+
+def test_get_feature_extractors(asreview_test_project):
+    with asreview_test_project.db as db:
+        assert db.get_results_table()["feature_extractor"].loc[:2].isnull().all()
+        assert (db.get_results_table()["feature_extractor"].loc[3:] == "tfidf").all()
+
+
+def test_get_balancers(asreview_test_project):
+    with asreview_test_project.db as db:
+        assert db.get_results_table()["balancer"].loc[:2].isnull().all()
+        assert (db.get_results_table()["balancer"].loc[3:] == "balanced").all()
+
+
+def test_get_training_sets(asreview_test_project):
+    with asreview_test_project.db as db:
+        assert db.get_results_table()["training_set"].loc[:2].isnull().all()
+        assert db.get_results_table()["training_set"].loc[3:].notnull().all()
+
+        # test if the training set is adcent
+        assert db.get_results_table()["training_set"].loc[3:].is_monotonic_increasing
+
+        assert db.get_results_table()["training_set"].max() == 21
+
+
+def test_get_order_of_labeling(asreview_test_project):
+    with asreview_test_project.db as db:
+        assert isinstance(db.get_results_table()["record_id"], pd.Series)
+        assert all(db.get_results_table()["record_id"] == TEST_RECORD_IDS)
+
+
+def test_get_labels(asreview_test_project):
+    with asreview_test_project.db as db:
+        labels = db.get_results_table("label")["label"]
+        assert isinstance(labels, pd.Series)
+        assert all(labels == TEST_LABELS)
+
+
+def test_get_labels_no_priors(asreview_test_project):
+    with asreview_test_project.db as db:
+        labels = db.get_results_table("label", priors=False)["label"]
+        assert isinstance(labels, pd.Series)
+        assert all(labels == TEST_LABELS[0:])
+
+
+def test_get_labeling_times(asreview_test_project):
+    with asreview_test_project.db as db:
+        results = db.get_results_table()
+        assert isinstance(results["time"], pd.Series)
+        assert results["time"].dtype == "Float64"
+
+
+def test_get_feature_matrix(asreview_test_project):
+    assert len(asreview_test_project.feature_matrices) == 1
+
+    feature_model_name = asreview_test_project.feature_matrices[0]["id"]
+
+    feature_matrix = asreview_test_project.get_feature_matrix(feature_model_name)
+    assert isinstance(feature_matrix, csr_matrix)
+
+
+def test_move_ranking_data_to_results(project_with_records):
+    with project_with_records.db as db:
+        db.add_last_ranking(
+            range(1, len(TEST_RECORD_TABLE) + 1), "nb", "max", "balanced", "tfidf", 4
+        )
+        for i in range(4):
+            db.query_top_ranked()
+        data = db.get_results_table(pending=True)
+
+    assert data["record_id"].to_list() == [1, 2, 3, 4]
+    assert data["label"].isnull().sum() == 4
+    assert data["classifier"].to_list() == ["nb"] * 4
+
+
+def test_query_top_ranked(project_with_records):
+    test_ranking = [2, 1, 0] + list(range(3, len(TEST_RECORD_TABLE)))
+    with project_with_records.db as db:
+        db.add_last_ranking(test_ranking, "nb", "max", "balanced", "tfidf", 4)
+        for i in range(5):
+            db.query_top_ranked()
+
+        data = db.get_results_table(pending=True)
+        assert data["record_id"].to_list() == [2, 1, 0, 3, 4]
+        assert data["classifier"].to_list() == ["nb"] * 5
+        assert data["querier"].to_list() == ["max"] * 5
+        assert data["balancer"].to_list() == ["balanced"] * 5
+        assert data["feature_extractor"].to_list() == ["tfidf"] * 5
+        assert data["training_set"].to_list() == [4] * 5
+
+
+def test_label_record(project_with_records):
+    test_ranking = list(range(len(TEST_RECORD_TABLE)))
+    with project_with_records.db as db:
+        db.add_last_ranking(test_ranking, "nb", "max", "balanced", "tfidf", 4)
+        for i in range(6):
+            # Test without specifying notes.
+            db.label_record(TEST_RECORD_IDS[i], TEST_LABELS[i])
+
+        data = db.get_results_table(pending=True)
+        assert data["record_id"].to_list() == TEST_RECORD_IDS[:6]
+        assert data["label"].to_list() == TEST_LABELS[:6]
+        assert data["classifier"].to_list() == [None] * 6
+        assert data["querier"].to_list() == [None] * 6
+        assert data["balancer"].to_list() == [None] * 6
+        assert data["feature_extractor"].to_list() == [None] * 6
+        assert data["training_set"].isna().all()
+
+        for i in range(3):
+            db.query_top_ranked()
+        data = db.get_results_table(pending=True)
+        assert data["label"].to_list()[:6] == TEST_LABELS[:6]
+        assert data["label"][6:].isna().all()
+        assert data["record_id"].to_list() == TEST_RECORD_IDS[:6] + [0, 1, 2]
+
+        db.label_record(1, 1)
+        labels = db.get_results_table("label", pending=True)["label"]
+        assert labels.to_list()[:6] == TEST_LABELS[:6]
+        assert labels[7] == 1
+
+        db.label_record(0, 0)
+        db.label_record(2, 1)
+        data = db.get_results_table(pending=True)
+        assert data["label"].to_list() == TEST_LABELS[:6] + [0, 1, 1]
+
+
+def test_exist_new_labeled_records(project):
+    test_ranking = range(9, -1, -1)
+    with project.db as db:
+        db.input.add_records([Record(i, "foo") for i in range(10)])
+        assert not db.exist_new_labeled_records
+        db.add_last_ranking(test_ranking, "nb", "max", "balanced", "tfidf", 3)
+
+        assert not db.exist_new_labeled_records
+        db.label_record(4, 1)
+        db.label_record(5, 0)
+        db.label_record(6, 1)
+
+        assert not db.exist_new_labeled_records
+        for i in range(3):
+            db.query_top_ranked()
+        assert not db.exist_new_labeled_records
+        db.label_record(8, 1)
+        db.label_record(9, 1)
+        db.label_record(10, 1)
+        assert db.exist_new_labeled_records
+
+
+def test_update_decision(project_with_records):
+    with project_with_records.db as db:
+        for i in range(3):
+            db.label_record(TEST_RECORD_IDS[i], TEST_LABELS[i])
+
+        for i in range(3):
+            db.update_result(TEST_RECORD_IDS[i], 1 - TEST_LABELS[i])
+            new_label = db.get_results_record(TEST_RECORD_IDS[i])["label"][0]
+            assert new_label == 1 - TEST_LABELS[i]
+
+        db.update_result(TEST_RECORD_IDS[1], TEST_LABELS[1])
+        new_label = db.get_results_record(TEST_RECORD_IDS[1])["label"][0]
+        assert new_label == TEST_LABELS[1]
+
+        change_table = db.get_decision_changes()
+        changed_records = TEST_RECORD_IDS[:3] + [TEST_RECORD_IDS[1]]
+        new_labels = TEST_LABELS[:3] + [1 - TEST_LABELS[1]]
+
+        assert change_table["record_id"].to_list() == changed_records
+        assert change_table["label"].to_list() == new_labels
+
+
+def test_last_ranking(project):
+    record_ids = [1, 2, 3, 4, 5, 6]
+    ranking = [0, 2, 3, 5, 1, 4]
+    classifier = "nb"
+    querier = "max"
+    balancer = "balanced"
+    feature_extractor = "tfidf"
+    training_set = 2
+
+    with project.db as db:
+        db.input.add_records(
+            [
+                Record(0, "foo"),
+                Record(1, "foo"),
+                Record(2, "foo"),
+                Record(3, "foo"),
+                Record(4, "foo"),
+                Record(5, "foo"),
+            ]
+        )
+        db.add_last_ranking(
+            ranking,
+            classifier,
+            querier,
+            balancer,
+            feature_extractor,
+            training_set,
+        )
+
+        last_ranking = db.get_last_ranking_table()
+        assert isinstance(last_ranking, pd.DataFrame)
+        assert list(last_ranking.columns) == [
+            "record_id",
+            "ranking",
+            "classifier",
+            "querier",
+            "balancer",
+            "feature_extractor",
+            "training_set",
+            "time",
+        ]
+
+        assert last_ranking["ranking"].to_list() == [0, 1, 2, 3, 4, 5]
+        assert last_ranking["record_id"].to_list() == ranking
+        assert last_ranking["classifier"].to_list() == [classifier] * len(record_ids)
+
+
+def test_get_pool(asreview_test_project):
+    with asreview_test_project.db as db:
+        pool = db.get_pool()
+
+    assert isinstance(pool, pd.Series)
+    assert len(pool) == 76
+    assert pool[:5].to_list() == [83, 52, 38, 0, 85]
+
+
+def test_get_labeled(asreview_test_project):
+    with asreview_test_project.db as db:
+        labeled = db.get_results_table()[["record_id", "label"]]
+
+    assert isinstance(labeled, pd.DataFrame)
+    assert labeled["record_id"].to_list() == TEST_RECORD_IDS
+    assert labeled["label"].to_list() == TEST_LABELS
+
+
+def test_add_extra_column(project):
+    """Check if db still works with extra colums added to tables."""
+    with project.db as db:
+        con = db._conn
+        cur = con.cursor()
+        cur.execute("ALTER TABLE last_ranking ADD COLUMN test_lr INTEGER;")
+        cur.execute("ALTER TABLE results ADD COLUMN test_res INTEGER;")
+        con.commit()
+        con.close()
+
+    ranking = [0, 2, 3, 5, 1, 4]
+    classifier = "nb"
+    querier = "max"
+    balancer = "balanced"
+    feature_extractor = "tfidf"
+    training_set = 2
+
+    with project.db as db:
+        db.input.add_records(
+            [
+                Record(0, "foo"),
+                Record(1, "foo"),
+                Record(2, "foo"),
+                Record(3, "foo"),
+                Record(4, "foo"),
+                Record(5, "foo"),
+            ]
+        )
+        db.add_last_ranking(
+            ranking,
+            classifier,
+            querier,
+            balancer,
+            feature_extractor,
+            training_set,
+        )
+
+        top_ranked = db.query_top_ranked(1)["record_id"]
+
+        assert isinstance(top_ranked, pd.Series)
+        assert len(top_ranked) == 1
+
+
+def test_get_pool_unlabeled(project):
+    # Create a db with one labeled, one pending and one pool record.
+    ranking = [0, 1, 2]
+    classifier = "nb"
+    querier = "max"
+    balancer = "balanced"
+    feature_extractor = "tfidf"
+    training_set = 2
+
+    with project.db as db:
+        db.input.add_records(
+            [
+                Record(0, "foo"),
+                Record(1, "foo"),
+                Record(2, "foo"),
+            ]
+        )
+        db.add_last_ranking(
+            ranking,
+            classifier,
+            querier,
+            balancer,
+            feature_extractor,
+            training_set,
+        )
+        db.query_top_ranked()["record_id"]
+        db.label_record(0, 1)
+        db.query_top_ranked()["record_id"]
+
+        assert db.get_pool().to_list() == [2]
+        assert db.get_unlabeled().to_list() == [1, 2]
+        assert db.get_pending()["record_id"].to_list() == [1]
+        assert db.get_results_table()["record_id"].to_list() == [0]

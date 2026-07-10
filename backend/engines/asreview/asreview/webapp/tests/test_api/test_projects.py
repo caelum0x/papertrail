@@ -1,0 +1,1316 @@
+import json
+import time
+import csv
+from io import BytesIO, StringIO
+from pathlib import Path
+
+import pandas as pd
+import pytest
+from jsonschema.exceptions import ValidationError
+
+import asreview as asr
+import asreview.webapp.tests.utils.api_utils as au
+import asreview.webapp.tests.utils.crud as crud
+import asreview.webapp.tests.utils.misc as misc
+from asreview.webapp import DB
+from asreview.webapp._authentication.models import Project
+from asreview.webapp.utils import asreview_path
+from asreview.webapp.utils import get_projects
+
+# NOTE: I don't see a plugin that can be used for testing
+# purposes
+UPLOAD_DATA = [
+    {"benchmark": "synergy:van_der_Valk_2021"},
+    {
+        "url": "https://raw.githubusercontent.com/asreview/"
+        + "asreview/master/tests/demo_data/generic_labels.csv"
+    },
+]
+
+
+def _asreview_file_archive():
+    return list(
+        Path("asreview", "webapp", "tests", "asreview-project-file-archive").glob(
+            "v[12]*/asreview-project-v[12]*-startreview.asreview"
+        )
+    )
+
+
+def test_get_projects(client, user, project):
+    r = au.get_all_projects(client)
+    assert r.status_code == 200
+    assert len(r.json["result"]) == 1
+    found_project = r.json["result"][0]
+    if client.application.config.get("AUTHENTICATION"):
+        assert found_project["id"] == project.project_id
+        assert found_project["roles"]["owner"]
+    else:
+        assert found_project["id"] == project.config["id"]
+
+
+# Test create a project
+def test_create_projects(client, user):
+    if client.application.config["AUTHENTICATION"]:
+        au.create_and_signin_user(client, 1)
+
+    r = au.create_project(client, "oracle", benchmark="synergy:van_der_Valk_2021")
+    assert r.status_code == 201
+    assert r.json["name"].startswith("van_der_Valk_2021")
+
+
+# Test create a project with incorrect tags
+@pytest.mark.skip(reason="tags are not used in the project creation anymore")
+def test_create_projects_with_incorrect_tags(client, project):
+    tags = json.dumps([{"foo": "bar"}, {"foo1": "bar1"}])
+
+    with pytest.raises(
+        ValidationError, match=r".*Failed validating .*type.* in schema.*"
+    ):
+        # request
+        au.update_project(
+            client,
+            project,
+            tags=json.dumps(tags),
+        )
+
+
+# Test create a project with correct tags
+@pytest.mark.skip(reason="tags are not used in the project creation anymore")
+def test_create_projects_with_correct_tags(client, project):
+    tags = [
+        {
+            "name": "Biomes",
+            "id": "biomes",
+            "values": [
+                {"id": "boreal_forest", "name": "Boreal Forest"},
+                {"id": "savanna", "name": "Savanna"},
+                {"id": "mangrove", "name": "Mangrove"},
+                {"id": "tropical_forest", "name": "Tropical Forest"},
+            ],
+        },
+        {
+            "name": "Restoration Approaches",
+            "id": "restoration_approaches",
+            "values": [
+                {
+                    "id": "direct_seeding",
+                    "name": "Direct seeding (i.e. spreading/planting seeds)",
+                },
+                {
+                    "id": "tree_planting",
+                    "name": "Planting trees (i.e. planting trees as seedlings)",
+                },
+                {
+                    "id": "assisted_natural_regeneration",
+                    "name": "Assisted natural regeneration",
+                },
+                {
+                    "id": "farmer_managed_natural_regeneration",
+                    "name": "Farmer managed natural regeneration",
+                },
+            ],
+        },
+    ]
+
+    # request
+    r = au.update_project(
+        client,
+        project,
+        tags=json.dumps(tags),
+    )
+    assert r.status_code == 200
+    assert r.json["mode"] == "oracle"
+    assert r.json["tags"] == tags
+
+
+# Test upgrading a post v0.x project
+def test_try_upgrade_a_modern_project(client, project):
+    data = misc.read_project_file(project)
+    assert not data["version"].startswith("0")
+
+    r = au.upgrade_projects(client, project)
+    assert r.status_code == 200
+
+
+# Test upgrading a v0.x project
+@pytest.mark.skip(reason="projects in 0 series should no longer be supported")
+def test_upgrade_an_old_project(client, user):
+    tests_folder = Path(__file__).parent.parent
+    asreview_v0_file = Path(
+        tests_folder,
+        "asreview-project-file-archive",
+        "v0.19",
+        "asreview-project-v0-19-startreview.asreview",
+    )
+
+    project = asr.Project.load(
+        open(asreview_v0_file, "rb"), asreview_path(), safe_import=True
+    )
+
+    # we need to make sure this new, old-style project can be found
+    # under current user if the app is authenticated
+    if client.application.config.get("AUTHENTICATION"):
+        new_project = Project(project_id=project.config.get("id"))
+        project = crud.create_project(DB, user, new_project)
+    # try to convert
+    r = au.upgrade_projects(client)
+    assert r.status_code == 400
+    assert r.json["message"].startswith("Not possible to upgrade")
+
+
+# Test importing old projects (min_version = 1), verify ids
+@pytest.mark.parametrize("fp", _asreview_file_archive())
+def test_import_project_files(client, user, project, fp):
+    r = au.import_project(client, fp)
+    # get contents asreview folder
+    folders = set(misc.get_folders_in_asreview_path())
+    assert len(folders) == 2
+    assert r.status_code == 200
+    assert isinstance(r.json["data"], dict)
+
+    if client.application.config.get("AUTHENTICATION"):
+        # assert it exists in the database
+        assert crud.count_projects() == 2
+        project = crud.last_project()
+        assert r.json["data"]["id"] == project.project_id
+        # assert the owner is current user
+        assert r.json["data"]["roles"]["owner"]
+    else:
+        assert r.json["data"]["id"] != project.config.get("id")
+    # in auth/non-auth the project folder must exist in the asreview folder
+    assert r.json["data"]["id"] in set([f.stem for f in folders])
+
+
+# Two imports of the same file with the same Idempotency-Key must produce
+# only one project on disk + DB; the second response must echo the first.
+# This guards against duplicate projects when a client retries an upload
+# after an upstream timeout (e.g. nginx).
+def test_import_project_idempotency(client, user, project, request):
+    fp = Path(
+        "asreview",
+        "webapp",
+        "tests",
+        "asreview-project-file-archive",
+        "v1.5",
+        "asreview-project-v1-5-startreview.asreview",
+    )
+    key = f"test-{request.node.name}"
+
+    r1 = au.import_project(client, fp, idempotency_key=key)
+    assert r1.status_code == 200
+    first_id = r1.json["data"]["id"]
+
+    r2 = au.import_project(client, fp, idempotency_key=key)
+    assert r2.status_code == 200
+    # Same project id returned -> server short-circuited via the cache.
+    assert r2.json["data"]["id"] == first_id
+    assert r2.json == r1.json
+
+    # Only one new on-disk project (plus the fixture's project = 2 total).
+    folders = set(misc.get_folders_in_asreview_path())
+    assert len(folders) == 2
+    assert first_id in {f.stem for f in folders}
+
+    if client.application.config.get("AUTHENTICATION"):
+        # And exactly one new DB row (fixture project + the imported one).
+        assert crud.count_projects() == 2
+
+
+# Without the Idempotency-Key header the cache is bypassed entirely:
+# repeated imports of the same file create separate projects, matching
+# the original (non-idempotent) behaviour.
+def test_import_project_without_idempotency_key_creates_duplicate(
+    client, user, project
+):
+    fp = Path(
+        "asreview",
+        "webapp",
+        "tests",
+        "asreview-project-file-archive",
+        "v1.5",
+        "asreview-project-v1-5-startreview.asreview",
+    )
+
+    r1 = au.import_project(client, fp)
+    r2 = au.import_project(client, fp)
+    assert r1.status_code == 200
+    assert r2.status_code == 200
+    assert r1.json["data"]["id"] != r2.json["data"]["id"]
+
+    folders = set(misc.get_folders_in_asreview_path())
+    # fixture project + two imports
+    assert len(folders) == 3
+
+
+# If anything fails after Project.load has copied the new project to disk,
+# the on-disk directory must be removed so we don't leak orphan projects.
+def test_import_project_cleans_up_on_failure(client, user, project, monkeypatch):
+    def boom(*args, **kwargs):
+        raise RuntimeError("simulated failure after Project.load")
+
+    monkeypatch.setattr(
+        "asreview.webapp._api.projects.ActiveLearningCycle.from_meta",
+        boom,
+    )
+
+    fp = Path(
+        "asreview",
+        "webapp",
+        "tests",
+        "asreview-project-file-archive",
+        "v1.5",
+        "asreview-project-v1-5-startreview.asreview",
+    )
+
+    folders_before = set(misc.get_folders_in_asreview_path())
+    projects_before = (
+        crud.count_projects()
+        if client.application.config.get("AUTHENTICATION")
+        else None
+    )
+
+    # The Flask test app re-raises exceptions, so the route's `raise` after
+    # cleanup surfaces here. The behaviour we care about is the side-effect:
+    # the on-disk dir + DB row created mid-import must have been removed.
+    with pytest.raises(RuntimeError, match="simulated failure"):
+        au.import_project(client, fp)
+
+    # No new on-disk project: the dir created by Project.load was rolled back.
+    folders_after = set(misc.get_folders_in_asreview_path())
+    assert folders_after == folders_before
+
+    # And no orphan DB row either.
+    if client.application.config.get("AUTHENTICATION"):
+        assert crud.count_projects() == projects_before
+
+
+# Test known demo data
+@pytest.mark.parametrize("subset", ["plugin", "benchmark"])
+def test_demo_data_project(client, user, subset):
+    r = au.get_demo_data(client, subset)
+    assert r.status_code == 200
+    assert isinstance(r.json["result"], list)
+
+
+# Test unknown demo data
+def test_unknown_demo_data_project(client, user):
+    r = au.get_demo_data(client, "abcdefg")
+    assert r.status_code == 400
+    assert r.json["message"] == "demo-data-loading-failed"
+
+
+# Test uploading benchmark data to a project
+@pytest.mark.parametrize("upload_data", UPLOAD_DATA)
+def test_upload_benchmark_data_to_project(client, user, upload_data):
+    r = au.create_project(client, **upload_data)
+    project = user.projects[0] if user is not None else get_projects()[0]
+    assert r.status_code == 201
+    if client.application.config.get("AUTHENTICATION"):
+        assert r.json["id"] == project.project_id
+    else:
+        assert r.json["id"] == project.config.get("id")
+    asr.Project(project.project_path).db.input.get_df()
+
+
+# Test getting the data after an upload
+@pytest.mark.parametrize("upload_data", UPLOAD_DATA)
+def test_get_project_data(client, user, upload_data):
+    r = au.create_project(client, **upload_data)
+    project = user.projects[0] if user is not None else get_projects()[0]
+
+    r = au.get_project_data(client, project)
+    assert r.status_code == 200
+    assert r.json["filename"] == misc.extract_filename_stem(upload_data)
+
+
+# Test get dataset writer
+def test_get_dataset_writer(client, project):
+    r = au.get_project_dataset_writer(client, project)
+    assert r.status_code == 200
+    assert isinstance(r.json["result"], list)
+
+
+# Test updating a project
+def test_update_project_info(client, project):
+    new_name = "new name"
+    new_authors = "new authors"
+    new_description = "new description"
+
+    # request
+    r = au.update_project(
+        client,
+        project,
+        name=new_name,
+        authors=new_authors,
+        description=new_description,
+    )
+    assert r.status_code == 200
+    assert r.json["authors"] == new_authors
+    assert r.json["description"] == new_description
+    assert r.json["mode"] == "oracle"
+    assert r.json["name"] == new_name
+
+
+def test_search_data(client, project):
+    r = au.search_project_data(client, project, query="Software&n_max=10")
+    assert r.status_code == 200
+    assert "result" in r.json
+    assert isinstance(r.json["result"], list)
+    assert len(r.json["result"]) <= 10
+
+
+# Test labeling of prior data
+@pytest.mark.parametrize("label", [0, 1])
+def test_label_item(client, project, label):
+    r = au.label_random_project_data_record(client, project, label)
+    assert r.status_code == 200
+    assert r.json["success"]
+
+
+# Test getting labeled records
+def test_get_labeled_project_data(client, project):
+    # label a random record
+    au.label_random_project_data_record(client, project, 1)
+    # collect labeled records
+    r = au.get_labeled_project_data(client, project)
+    assert r.status_code == 200
+    assert "result" in r.json
+    assert isinstance(r.json["result"], list)
+    assert len(r.json["result"]) == 1
+
+
+# Test getting labeled records stats
+def test_get_labeled_stats(client, project):
+    # label 2 random records
+    au.label_random_project_data_record(client, project, 1)
+    au.label_random_project_data_record(client, project, 0)
+    # collect stats
+    r = au.get_labeled_project_data_stats(client, project)
+
+    assert r.status_code == 200
+    assert isinstance(r.json, dict)
+    assert r.json["n"] == 2
+    assert r.json["n_exclusions"] == 1
+    assert r.json["n_inclusions"] == 1
+    assert r.json["n_prior"] == 2
+
+
+# Test listing the available algorithms
+def test_list_learners(client, user):
+    r = au.get_project_algorithms_options(client)
+    assert r.status_code == 200
+    expected_keys = [
+        "balancers",
+        "classifiers",
+        "feature_extractors",
+        "queriers",
+    ]
+    for key in expected_keys:
+        assert key in r.json["models"].keys()
+        assert isinstance(r.json["models"][key], list)
+        for item in r.json["models"][key]:
+            assert "name" in item.keys()
+            assert "label" in item.keys()
+
+
+# Test setting the algorithms
+def test_set_project_algorithms(client, project):
+    data = misc.choose_project_algorithms()
+    data["current_value"] = json.dumps(data["current_value"])
+
+    r = au.set_project_algorithms(client, project, data=data)
+    assert r.status_code == 200
+
+
+def test_get_project_algorithms(client, project):
+    data_algorithms = misc.choose_project_algorithms()
+    au.set_project_algorithms(client, project, data=data_algorithms)
+    # get the project algorithms
+    r = au.get_project_algorithms(client, project)
+    assert r.status_code == 200
+    assert r.json["current_value"]["balancer"] == r.json["current_value"]["balancer"]
+    assert (
+        r.json["current_value"]["feature_extractor"]
+        == r.json["current_value"]["feature_extractor"]
+    )
+    assert (
+        r.json["current_value"]["classifier"] == r.json["current_value"]["classifier"]
+    )
+    assert r.json["current_value"]["querier"] == r.json["current_value"]["querier"]
+
+
+# Test starting the model
+def test_start_and_model_ready(client, project):
+    # label 2 random records
+    au.label_random_project_data_record(client, project, 1)
+    au.label_random_project_data_record(client, project, 0)
+    # select a model
+    data = misc.choose_project_algorithms()
+    au.set_project_algorithms(client, project, data=data)
+    r = au.set_project_status(client, project, status="review", trigger_model=True)
+    assert r.status_code == 201
+    assert r.json["status"] == "review"
+    # make sure model is done
+    time.sleep(10)
+
+
+# Test status of project
+@pytest.mark.parametrize(
+    ("state_name", "expected_state"),
+    [
+        ("setup", "setup"),
+        ("review", "review"),
+        ("finish", "finished"),
+    ],
+)
+def test_status_project(client, project, state_name, expected_state):
+    # call these progression steps
+    if state_name in ["setup", "review", "finish"]:
+        # select a model
+        data = misc.choose_project_algorithms()
+        au.set_project_algorithms(client, project, data=data)
+    if state_name in ["review", "finish"]:
+        # start the model
+        au.set_project_status(client, project, status="review", trigger_model=True)
+        time.sleep(15)
+    if state_name == "finish":
+        # mark project as finished
+        au.set_project_status(client, project, "finished")
+
+    r = au.get_project_status(client, project)
+    assert r.status_code == 200
+    assert r.json["status"] == expected_state
+
+
+# Test exporting the results
+@pytest.mark.parametrize("format", ["csv", "tsv", "xlsx"])
+def test_export_result(client, project, format):
+    au.label_random_project_data_record(client, project, 1)
+    au.label_random_project_data_record(client, project, 0)
+
+    r = au.export_project_dataset(client, project, format)
+    assert r.status_code == 200
+
+
+@pytest.mark.parametrize(
+    "project_name",
+    ["My Project", "user@example.com's project", "project (2024)"],
+)
+def test_export_result_filename(client, project, project_name):
+    """Test that the Content-Disposition filename does not contain quotes.
+
+    Special characters like @ in the project name cause Werkzeug to quote the
+    filename in the Content-Disposition header. On Windows, quotes are replaced
+    by underscores, resulting in filenames like _name.csv_ instead of name.csv.
+    """
+    au.update_project(client, project, name=project_name)
+    au.label_random_project_data_record(client, project, 1)
+    au.label_random_project_data_record(client, project, 0)
+
+    for format in ("csv", "tsv", "xlsx"):
+        r = au.export_project_dataset(
+            client,
+            project,
+            format,
+            collections=["relevant", "irrelevant", "not_seen"],
+        )
+        filename = r.headers["Content-Disposition"].split("filename=")[1]
+        assert not filename.startswith('"'), (
+            f"Filename should not start with a quote: {filename}"
+        )
+        assert filename.endswith(format), (
+            f"Filename should end with .{format}: {filename}"
+        )
+
+
+# Test that checks that no records are left out when exporting full dataset.
+# This checks https://github.com/asreview/asreview/issues/2347 is fixed.
+def test_export_all_records(client, project):
+    # Add a relevant, irrelevant and pending record.
+    au.label_random_project_data_record(client, project, 1)
+    au.label_random_project_data_record(client, project, 0)
+    au.get_project_current_document(client, project)
+
+    # Cast `project` to type `asreview.Project`. (In auth-mode it's the webapp database
+    # model instead.)
+    asr_project = asr.Project(project.project_path)
+    # Add a last ranking to the results, as if a model has been trained.
+    record_ids = asr_project.db.input["record_id"].to_list()
+    with asr_project.db as db:
+        db.add_last_ranking(record_ids, "nb", "max", "double", "tfidf", 2)
+
+    for collection, size in [
+        ("relevant", 1),
+        ("irrelevant", 1),
+        ("not_seen", len(record_ids) - 2),
+    ]:
+        r = au.export_project_dataset(client, project, "csv", collections=[collection])
+        assert r.status_code == 200
+        file_data = StringIO(r.data.decode("utf-8"))
+        csv_rows = list(csv.reader(file_data))
+        assert len(csv_rows) == size + 1
+
+
+# Test uploading a RIS file with many authors, exporting it and importing it again.
+# This checks https://github.com/asreview/asreview/issues/2252 is fixed.
+def test_export_project_many_authors(client, user):
+    tests_folder = Path(__file__).parent.parent
+    with open(tests_folder / "data" / "ris_many_authors.ris", "rb") as f:
+        ris_create_response = au.create_project(
+            client, file=(f, "ris_many_authors.ris")
+        )
+    assert ris_create_response.status_code == 201
+    project = user.projects[0] if user is not None else get_projects()[0]
+    au.label_random_project_data_record(client, project, 1)
+    for file_format in ("csv", "tsv", "xlsx"):
+        export_response = au.export_project_dataset(
+            client,
+            project,
+            file_format,
+            collections=("relevant", "irrelevant", "not_seen"),
+        )
+        assert export_response.status_code == 200
+        export_data = export_response.data
+        create_response = au.create_project(
+            client, file=(BytesIO(export_data), f"export.{file_format}")
+        )
+        assert create_response.status_code == 201
+
+
+# Test exporting the entire project
+def test_export_project(client, project):
+    au.label_random_project_data_record(client, project, 1)
+    au.label_random_project_data_record(client, project, 0)
+    # request
+    response = au.export_project(client, project)
+
+    # get the file names in the project
+    tree = misc.get_zip_file_names(response.data)
+
+    # get the file names
+    assert response.status_code == 200
+    assert "project.json" in tree
+    assert "tmp/data.pickle" not in tree
+
+
+# Test setting the project status
+@pytest.mark.parametrize("status", ["review", "finished"])
+def test_set_project_status(client, project, status):
+    au.upload_label_set_and_start_model(client, project)
+    if status == "review":
+        r = au.set_project_status(client, project, "finished")
+        assert r.status_code == 201
+
+    r = au.set_project_status(client, project, status)
+    assert r.status_code == 201
+
+
+# Test get progress info
+def test_get_progress_info(client, project):
+    # label 2 random records
+    au.label_random_project_data_record(client, project, 1)
+    au.label_random_project_data_record(client, project, 0)
+    # get progress
+    r = au.get_project_progress(client, project)
+    assert r.status_code == 200
+    assert isinstance(r.json, dict)
+    assert r.json["n_excluded"] == 1
+    assert r.json["n_included"] == 1
+    assert r.json["n_pool"] == r.json["n_records"] - 2
+
+
+# Test get progress data on the article
+def test_get_progress_data(client, project):
+    r = au.get_project_progress_data(client, project)
+    assert r.status_code == 200
+    assert isinstance(r.json, list)
+
+
+# Test retrieve documents in order to review
+def test_retrieve_document_for_review(client, project):
+    au.upload_label_set_and_start_model(client, project)
+    r = au.get_project_current_document(client, project)
+
+    assert r.status_code == 200
+    assert isinstance(r.json, dict)
+    assert r.json["status"] == "review"
+    assert isinstance(r.json["result"], dict)
+    assert isinstance(r.json["result"]["record_id"], int)
+
+
+# Test label a document after the model has been started
+def test_label_a_document_with_running_model(client, user, project):
+    au.upload_label_set_and_start_model(client, project)
+    # get a document
+    r = au.get_project_current_document(client, project)
+    # label it
+    r = au.label_project_record(
+        client, project, r.json["result"]["record_id"], label=1, prior=0, note="note"
+    )
+    assert r.status_code == 200
+    time.sleep(10)
+
+
+# Test update label of a document after the model has been started
+def test_update_label_of_document_with_running_model(client, project):
+    au.upload_label_set_and_start_model(client, project)
+    r = au.get_project_current_document(client, project)
+    # get id
+    record_id = r.json["result"]["record_id"]
+    # label it
+    au.label_project_record(client, project, record_id, label=1, prior=0, note="note")
+    # change label
+    r = au.update_label_project_record(
+        client, project, record_id, label=0, prior=0, note="changed note"
+    )
+    assert r.status_code == 200
+    time.sleep(10)
+
+
+# Test deleting a project
+def test_delete_project(client, project):
+    r = au.delete_project(client, project)
+    assert r.status_code == 200
+    assert r.json["success"]
+
+
+# Test admin deleting another user's project
+def test_admin_can_delete_other_users_project(client_auth):
+    """Test that an admin can delete a project owned by another user"""
+    # Create first user (project owner)
+    au.create_and_signin_user(client_auth, 1)
+    assert len(crud.list_projects()) == 0
+
+    # Create a project for the first user
+    r = au.create_project(client_auth, "oracle", benchmark="synergy:van_der_Valk_2021")
+    assert r.status_code == 201
+    assert len(crud.list_projects()) == 1
+
+    # Sign out first user
+    au.signout_user(client_auth)
+
+    # Create second user (admin)
+    admin_user = au.create_and_signin_user(client_auth, 2)
+
+    # Set the second user as admin
+    admin_user.role = "admin"
+    DB.session.commit()
+
+    # delete project
+    project = crud.list_projects()[0]
+    r = au.delete_project(client_auth, project)
+
+    assert r.status_code == 200
+    assert r.json["success"]
+    assert len(crud.list_projects()) == 0
+
+
+# Test regular user cannot delete another user's project
+def test_regular_user_cannot_delete_other_users_project(client_auth):
+    """Test that a regular user cannot delete a project owned by another user"""
+    # Create first user (project owner)
+    au.create_and_signin_user(client_auth, 1)
+    assert len(crud.list_projects()) == 0
+
+    # Create a project for the first user
+    r = au.create_project(client_auth, "oracle", benchmark="synergy:van_der_Valk_2021")
+    assert r.status_code == 201
+    assert len(crud.list_projects()) == 1
+
+    # Sign out first user
+    au.signout_user(client_auth)
+
+    # Create second user (regular member)
+    regular_user = au.create_and_signin_user(client_auth, 2)
+
+    # Verify regular user is not admin
+    assert regular_user.role == "member"
+    assert not regular_user.is_admin
+
+    # Verify regular user cannot delete the project owned by first user
+    project = crud.list_projects()[0]
+    r = au.delete_project(client_auth, project)
+
+    # Should return 403 Forbidden
+    assert r.status_code == 403
+    assert len(crud.list_projects()) == 1
+
+
+@pytest.mark.parametrize(
+    "api_call,project_required,params",
+    [
+        (au.get_all_projects, False, {}),
+        (au.get_demo_data, False, {"subset": "benchmark"}),
+        (au.get_project_algorithms_options, False, {}),
+        (au.get_project_algorithms, True, {}),
+        (au.create_project, True, {}),
+        (au.update_project, True, {}),
+        (au.upgrade_projects, True, {}),
+        (au.get_project_data, True, {}),
+        (au.get_project_dataset_writer, True, {}),
+        (au.search_project_data, True, {"query": "Software"}),
+        (au.label_project_record, True, {"record_id": 1, "label": 1}),
+        (au.update_label_project_record, True, {"record_id": 1, "label": 1}),
+        (au.get_labeled_project_data, True, {}),
+        (au.get_labeled_project_data_stats, True, {}),
+        (au.set_project_algorithms, True, {"data": {}}),
+        (au.set_project_status, True, {"status": "review"}),
+        (au.get_project_status, True, {}),
+        (au.export_project_dataset, True, {"format": "csv"}),
+        (au.export_project, True, {}),
+        (au.get_project_progress, True, {}),
+        (au.get_project_progress_data, True, {}),
+        (au.get_project_current_document, True, {}),
+        (au.delete_project, True, {}),
+    ],
+)
+def test_unauthorized_use_of_api_calls(
+    client_auth, project, api_call, project_required, params
+):
+    au.signout_user(client_auth)
+
+    if project_required:
+        params["project"] = project
+
+    r = api_call(client_auth, **params)
+    assert r.status_code == 401
+
+
+def test_generate_invitation_link(client_auth, project):
+    """Test that invitation token contains valid project_id and token"""
+    import base64
+    import hmac
+    import hashlib
+    from flask import current_app
+
+    # Generate invitation link
+    r = client_auth.post(f"/api/projects/{project.project_id}/invitation-link/generate")
+    assert r.status_code == 200
+
+    data = r.json
+    assert "encoded_token" in data
+    assert "token" in data
+
+    encoded_token = data["encoded_token"]
+    returned_token = data["token"]
+
+    # Decode the base64 encoded token
+    decoded_bytes = base64.urlsafe_b64decode(encoded_token.encode("utf-8"))
+
+    # Split payload and signature based on position
+    # SHA256 signature is always 32 bytes at the end, preceded by a 1-byte separator
+    signature = decoded_bytes[-32:]
+    separator = decoded_bytes[-33:-32]
+    payload_bytes = decoded_bytes[:-33]
+
+    # Verify separator is a dot
+    assert separator == b"."
+
+    # Decode payload to string
+    payload = payload_bytes.decode("utf-8")
+
+    # Verify payload format: project_id:token
+    assert ":" in payload
+    decoded_project_id, decoded_token = payload.split(":", 1)
+
+    # Verify the decoded values match
+    assert decoded_project_id == project.project_id
+    assert decoded_token == returned_token
+
+    # Verify the HMAC signature
+    secret_key = current_app.config.get("SECRET_KEY", "").encode("utf-8")
+    expected_signature = hmac.new(secret_key, payload_bytes, hashlib.sha256).digest()
+    assert signature == expected_signature
+
+
+def test_generate_invitation_link_regenerates_token(client_auth, project):
+    """Test that regenerating creates a new token and invalidates old link"""
+
+    # Generate first link
+    r1 = client_auth.post(
+        f"/api/projects/{project.project_id}/invitation-link/generate"
+    )
+    assert r1.status_code == 200
+    token1 = r1.json["token"]
+    encoded_token1 = r1.json["encoded_token"]
+
+    # Regenerate link
+    r2 = client_auth.post(
+        f"/api/projects/{project.project_id}/invitation-link/generate"
+    )
+    assert r2.status_code == 200
+    token2 = r2.json["token"]
+    encoded_token2 = r2.json["encoded_token"]
+
+    # Tokens should be different (regenerated each time)
+    assert token1 != token2
+    assert encoded_token1 != encoded_token2
+
+
+def test_fetch_invitation_link(client_auth, project):
+    """Test fetching existing invitation link"""
+
+    # Initially, no invitation link should exist
+    r = client_auth.get(f"/api/projects/{project.project_id}/invitation-link")
+    assert r.status_code == 200
+    assert r.json["encoded_token"] is None
+
+    # Generate invitation link
+    r_gen = client_auth.post(
+        f"/api/projects/{project.project_id}/invitation-link/generate"
+    )
+    assert r_gen.status_code == 200
+    generated_token = r_gen.json["encoded_token"]
+
+    # Fetch the invitation link
+    r_fetch = client_auth.get(f"/api/projects/{project.project_id}/invitation-link")
+    assert r_fetch.status_code == 200
+    assert r_fetch.json["encoded_token"] == generated_token
+    assert r_fetch.json["token"] is not None
+
+
+def test_revoke_invitation_link(client_auth, project):
+    """Test revoking invitation link"""
+
+    # Generate invitation link first
+    r_gen = client_auth.post(
+        f"/api/projects/{project.project_id}/invitation-link/generate"
+    )
+    assert r_gen.status_code == 200
+    assert r_gen.json["encoded_token"] is not None
+
+    # Verify link exists
+    r_check = client_auth.get(f"/api/projects/{project.project_id}/invitation-link")
+    assert r_check.status_code == 200
+    assert r_check.json["encoded_token"] is not None
+
+    # Revoke the invitation link
+    r_revoke = client_auth.delete(f"/api/projects/{project.project_id}/invitation-link")
+    assert r_revoke.status_code == 200
+    assert r_revoke.json["message"] == "Invitation link revoked successfully"
+
+    # Verify link no longer exists
+    r_verify = client_auth.get(f"/api/projects/{project.project_id}/invitation-link")
+    assert r_verify.status_code == 200
+    assert r_verify.json["encoded_token"] is None
+
+
+# ##############################################
+# Prior knowledge from labeled records
+# ##############################################
+
+
+def _create_csv_bytes(records):
+    """Create a CSV file in memory from a list of dicts."""
+    df = pd.DataFrame(records)
+    buf = BytesIO()
+    df.to_csv(buf, index=False)
+    buf.seek(0)
+    return buf
+
+
+def _get_priors(project_id):
+    """Open a project by id and return its prior knowledge records."""
+    project_path = asreview_path() / project_id
+    with asr.Project(project_path, project_id=project_id).db as db:
+        return db.get_priors()
+
+
+def _get_input_data(project_id):
+    """Open a project by id and return input record_id and included columns."""
+    project_path = asreview_path() / project_id
+    with asr.Project(project_path, project_id=project_id).db as db:
+        return db.input[["record_id", "included"]]
+
+
+def test_create_project_partial_labels_become_priors(client, user):
+    """Labeled records in a partially labeled dataset should become priors."""
+    records = [
+        {"title": "Record A", "abstract": "Abstract A", "label_included": 1},
+        {"title": "Record B", "abstract": "Abstract B", "label_included": 1},
+        {"title": "Record C", "abstract": "Abstract C", "label_included": 0},
+        {"title": "Record D", "abstract": "Abstract D", "label_included": ""},
+        {"title": "Record E", "abstract": "Abstract E", "label_included": ""},
+        {"title": "Record F", "abstract": "Abstract F", "label_included": ""},
+    ]
+    csv = _create_csv_bytes(records)
+    r = au.create_project(client, file=(csv, "test.csv"))
+    assert r.status_code == 201
+
+    priors = _get_priors(r.json["id"])
+    assert len(priors) == 3
+    assert int(priors["label"].sum()) == 2  # 2 included, 1 excluded
+
+
+def test_create_project_prior_labels_match_input(client, user):
+    """Each prior's label should match the original included value."""
+    records = [
+        {"title": "Record A", "abstract": "Abstract A", "label_included": 1},
+        {"title": "Record B", "abstract": "Abstract B", "label_included": 0},
+        {"title": "Record C", "abstract": "Abstract C", "label_included": 1},
+        {"title": "Record D", "abstract": "Abstract D", "label_included": ""},
+        {"title": "Record E", "abstract": "Abstract E", "label_included": ""},
+    ]
+    csv = _create_csv_bytes(records)
+    r = au.create_project(client, file=(csv, "test.csv"))
+    assert r.status_code == 201
+
+    project_id = r.json["id"]
+    priors = _get_priors(project_id)
+    input_data = _get_input_data(project_id)
+
+    for _, row in priors.iterrows():
+        original = input_data.loc[
+            input_data["record_id"] == row["record_id"], "included"
+        ].iloc[0]
+        assert row["label"] == original
+
+
+def test_create_project_no_labels_no_priors(client, user):
+    """A dataset with no labels should produce no priors."""
+    records = [
+        {"title": "Record A", "abstract": "Abstract A", "label_included": ""},
+        {"title": "Record B", "abstract": "Abstract B", "label_included": ""},
+    ]
+    csv = _create_csv_bytes(records)
+    r = au.create_project(client, file=(csv, "test.csv"))
+    assert r.status_code == 201
+
+    priors = _get_priors(r.json["id"])
+    assert len(priors) == 0
+
+
+def test_create_project_all_labeled_no_priors(client, user):
+    """A fully labeled dataset should produce no priors."""
+    records = [
+        {"title": "Record A", "abstract": "Abstract A", "label_included": 1},
+        {"title": "Record B", "abstract": "Abstract B", "label_included": 0},
+    ]
+    csv = _create_csv_bytes(records)
+    r = au.create_project(client, file=(csv, "test.csv"))
+    assert r.status_code == 201
+
+    priors = _get_priors(r.json["id"])
+    assert len(priors) == 0
+
+
+def test_create_project_only_included_labels(client, user):
+    """Records labeled as included only (no excluded) should still become priors."""
+    records = [
+        {"title": "Record A", "abstract": "Abstract A", "label_included": 1},
+        {"title": "Record B", "abstract": "Abstract B", "label_included": 1},
+        {"title": "Record C", "abstract": "Abstract C", "label_included": ""},
+    ]
+    csv = _create_csv_bytes(records)
+    r = au.create_project(client, file=(csv, "test.csv"))
+    assert r.status_code == 201
+
+    priors = _get_priors(r.json["id"])
+    assert len(priors) == 2
+    assert all(priors["label"] == 1)
+
+
+def test_create_project_only_excluded_labels(client, user):
+    """Records labeled as excluded only (no included) should still become priors."""
+    records = [
+        {"title": "Record A", "abstract": "Abstract A", "label_included": 0},
+        {"title": "Record B", "abstract": "Abstract B", "label_included": ""},
+        {"title": "Record C", "abstract": "Abstract C", "label_included": ""},
+    ]
+    csv = _create_csv_bytes(records)
+    r = au.create_project(client, file=(csv, "test.csv"))
+    assert r.status_code == 201
+
+    priors = _get_priors(r.json["id"])
+    assert len(priors) == 1
+    assert priors["label"].iloc[0] == 0
+
+
+def test_create_project_prior_labels_match_input_with_duplicates(client, user):
+    """Prior labels must match the input when the dataset contains duplicates.
+
+    Regression test for a bug where `label_priors` joined separate single-column
+    queries (`included` and `record_id`) positionally. Once `set_groups` writes
+    `duplicate_of` values, SQLite picks the `idx_record_group_id` covering index
+    for `SELECT record_id FROM record` and returns rows in group_id order, while
+    `SELECT included FROM record` still scans in rowid order — so the two series
+    no longer align and labels get applied to the wrong record_ids.
+
+    The dataset here puts labeled records at the end as duplicates of the
+    unlabeled records at the start. That forces `set_groups` to rewrite the
+    group_ids and reliably triggers the reordering.
+    """
+    records = [
+        {"title": "A", "abstract": "abs A", "label_included": ""},
+        {"title": "B", "abstract": "abs B", "label_included": ""},
+        {"title": "C", "abstract": "abs C", "label_included": ""},
+        {"title": "D", "abstract": "abs D", "label_included": ""},
+        {"title": "E", "abstract": "abs E", "label_included": ""},
+        # Duplicates of A-E with labels. set_groups will collapse their groups
+        # so group_id(10..14) = 0..4, which makes the record_id covering-index
+        # scan return rows in a non-rowid order.
+        {"title": "A", "abstract": "abs A", "label_included": 1},
+        {"title": "B", "abstract": "abs B", "label_included": 0},
+        {"title": "C", "abstract": "abs C", "label_included": 1},
+        {"title": "D", "abstract": "abs D", "label_included": 0},
+        {"title": "E", "abstract": "abs E", "label_included": 1},
+    ]
+    csv = _create_csv_bytes(records)
+    r = au.create_project(client, file=(csv, "test.csv"))
+    assert r.status_code == 201
+
+    project_id = r.json["id"]
+    project_path = asreview_path() / project_id
+    with asr.Project(project_path, project_id=project_id).db as db:
+        input_data = db.input[["record_id", "included"]]
+        groups = pd.DataFrame(db.input.get_groups(), columns=["group_id", "record_id"])
+        priors = db.get_priors()
+
+    assert len(priors) == 5
+
+    # Map each labeled input record to its group representative, then compare
+    # the prior's label against the input label for that group.
+    rid_to_gid = dict(zip(groups["record_id"], groups["group_id"]))
+    labeled_input = input_data.dropna(subset=["included"])
+    expected_by_group = {
+        rid_to_gid[int(row.record_id)]: int(row.included)
+        for row in labeled_input.itertuples(index=False)
+    }
+
+    for _, row in priors.iterrows():
+        assert int(row["label"]) == expected_by_group[row["record_id"]], (
+            f"Prior label mismatch at record_id {row['record_id']}: "
+            f"got {row['label']}, expected {expected_by_group[row['record_id']]}"
+        )
+
+
+def test_create_project_large_dataset(client_no_auth):
+    """Importing the Brouwer_2019 synergy dataset (38114 records) should not fail
+    due to SQLite's max SQL variables limit (32766)."""
+    r = au.create_project(client_no_auth, "oracle", benchmark="synergy:Brouwer_2019")
+    assert r.status_code == 201
+
+
+def test_prior_records_never_appear_during_screening(client, user):
+    """Records already labeled as prior knowledge must never be served during screening.
+
+    The labeled records are placed at the END of the dataset so their record_ids
+    (3 and 4) differ from their label values (1 and 0).  With the old bug
+    (using label values as record_ids), wrong records would be stored as priors
+    and the real priors would leak into the screening pool.
+    """
+    records = [
+        {"title": "Unlabeled A", "abstract": "Abstract A", "label_included": ""},
+        {"title": "Unlabeled B", "abstract": "Abstract B", "label_included": ""},
+        {"title": "Unlabeled C", "abstract": "Abstract C", "label_included": ""},
+        {"title": "Prior Relevant", "abstract": "Abstract D", "label_included": 1},
+        {"title": "Prior Irrelevant", "abstract": "Abstract E", "label_included": 0},
+    ]
+    csv = _create_csv_bytes(records)
+    r = au.create_project(client, file=(csv, "test.csv"))
+    assert r.status_code == 201
+
+    project_id = r.json["id"]
+    project_path = asreview_path() / project_id
+    asr_project = asr.Project(project_path, project_id=project_id)
+
+    # Determine which record_ids SHOULD be priors from the input data directly,
+    # rather than trusting get_priors() which could reflect buggy storage.
+    input_data = _get_input_data(project_id)
+    expected_prior_ids = set(
+        input_data.loc[input_data["included"].notnull(), "record_id"].tolist()
+    )
+    assert len(expected_prior_ids) == 2
+
+    # Simulate a trained model by inserting a ranking for all records.
+    record_ids = asr_project.db.input["record_id"].tolist()
+    with asr_project.db as db:
+        db.add_last_ranking(record_ids, "nb", "max", "double", "tfidf", 1)
+
+    # Screen all available records and assert none is a prior.
+    seen_record_ids = set()
+    for _ in range(len(records)):
+        r = au.get_project_current_document(client, asr_project)
+        assert r.status_code == 200
+        result = r.json.get("result")
+        if result is None:
+            break
+        record_id = result["record_id"]
+        assert record_id not in expected_prior_ids, (
+            f"Prior record {record_id} was served during screening"
+        )
+        seen_record_ids.add(record_id)
+        # Label the record so the next one is served.
+        au.label_project_record(client, asr_project, record_id, 0, prior=0)
+
+    # We should have screened exactly the unlabeled records.
+    expected_unlabeled = set(record_ids) - expected_prior_ids
+    assert seen_record_ids == expected_unlabeled
+
+
+def test_many_priors_never_appear_during_screening(client, user):
+    """Many prior records scattered throughout the dataset must never be screened.
+
+    Priors are spread across the beginning, middle, and end of the dataset with
+    a mix of relevant and irrelevant labels. This catches bugs where only the
+    first few priors are stored correctly (e.g. when label values are used as
+    record_ids, only records 0 and 1 would be affected).
+    """
+    records = [
+        {"title": "Prior R1", "abstract": "Abstract 0", "label_included": 1},
+        {"title": "Unlabeled 1", "abstract": "Abstract 1", "label_included": ""},
+        {"title": "Prior I1", "abstract": "Abstract 2", "label_included": 0},
+        {"title": "Prior R2", "abstract": "Abstract 3", "label_included": 1},
+        {"title": "Unlabeled 4", "abstract": "Abstract 4", "label_included": ""},
+        {"title": "Unlabeled 5", "abstract": "Abstract 5", "label_included": ""},
+        {"title": "Prior I2", "abstract": "Abstract 6", "label_included": 0},
+        {"title": "Prior R3", "abstract": "Abstract 7", "label_included": 1},
+        {"title": "Unlabeled 8", "abstract": "Abstract 8", "label_included": ""},
+        {"title": "Prior I3", "abstract": "Abstract 9", "label_included": 0},
+        {"title": "Unlabeled 10", "abstract": "Abstract 10", "label_included": ""},
+        {"title": "Prior R4", "abstract": "Abstract 11", "label_included": 1},
+        {"title": "Prior I4", "abstract": "Abstract 12", "label_included": 0},
+        {"title": "Unlabeled 13", "abstract": "Abstract 13", "label_included": ""},
+        {"title": "Prior R5", "abstract": "Abstract 14", "label_included": 1},
+    ]
+    n_priors = sum(1 for r in records if r["label_included"] != "")
+    n_unlabeled = len(records) - n_priors
+
+    csv = _create_csv_bytes(records)
+    r = au.create_project(client, file=(csv, "test.csv"))
+    assert r.status_code == 201
+
+    project_id = r.json["id"]
+    project_path = asreview_path() / project_id
+    asr_project = asr.Project(project_path, project_id=project_id)
+
+    # Determine expected priors from input data, not from get_priors().
+    input_data = _get_input_data(project_id)
+    expected_prior_ids = set(
+        input_data.loc[input_data["included"].notnull(), "record_id"].tolist()
+    )
+    assert len(expected_prior_ids) == n_priors
+
+    # Simulate a trained model by inserting a ranking for all records.
+    record_ids = asr_project.db.input["record_id"].tolist()
+    with asr_project.db as db:
+        db.add_last_ranking(record_ids, "nb", "max", "double", "tfidf", 1)
+
+    # Screen all available records and assert none is a prior.
+    seen_record_ids = set()
+    for _ in range(len(records)):
+        r = au.get_project_current_document(client, asr_project)
+        assert r.status_code == 200
+        result = r.json.get("result")
+        if result is None:
+            break
+        record_id = result["record_id"]
+        assert record_id not in expected_prior_ids, (
+            f"Prior record {record_id} was served during screening"
+        )
+        seen_record_ids.add(record_id)
+        au.label_project_record(client, asr_project, record_id, 0, prior=0)
+
+    # We should have screened exactly the unlabeled records.
+    expected_unlabeled = set(record_ids) - expected_prior_ids
+    assert seen_record_ids == expected_unlabeled
+    assert len(seen_record_ids) == n_unlabeled
+
+
+def test_duplicate_priors_never_appear_during_screening(client, user):
+    """Prior records that have duplicates must not appear during screening.
+
+    Duplicates are detected by identical title+abstract. When a prior is part
+    of a duplicate group, both the base record and its duplicates should be
+    excluded from screening. This test includes duplicate priors (labeled),
+    duplicate unlabeled records, and unique records to cover all combinations.
+    """
+    records = [
+        {
+            "title": "Unlabeled unique A",
+            "abstract": "Unique abstract A",
+            "label_included": "",
+        },
+        {
+            "title": "Unlabeled unique B",
+            "abstract": "Unique abstract B",
+            "label_included": "",
+        },
+        # Duplicate pair: both labeled as prior (relevant)
+        {"title": "Duplicate prior", "abstract": "Same abstract", "label_included": 1},
+        {"title": "Duplicate prior", "abstract": "Same abstract", "label_included": 1},
+        # Duplicate pair: first labeled as prior (irrelevant), second unlabeled
+        {
+            "title": "Dup mixed",
+            "abstract": "Another same abstract",
+            "label_included": 0,
+        },
+        {
+            "title": "Dup mixed",
+            "abstract": "Another same abstract",
+            "label_included": "",
+        },
+        # Duplicate pair: both unlabeled
+        {
+            "title": "Dup unlabeled",
+            "abstract": "Yet another same",
+            "label_included": "",
+        },
+        {
+            "title": "Dup unlabeled",
+            "abstract": "Yet another same",
+            "label_included": "",
+        },
+        {
+            "title": "Unlabeled unique C",
+            "abstract": "Unique abstract C",
+            "label_included": "",
+        },
+        # Another labeled prior with no duplicate
+        {
+            "title": "Solo prior",
+            "abstract": "Unique prior abstract",
+            "label_included": 1,
+        },
+    ]
+    csv = _create_csv_bytes(records)
+    r = au.create_project(client, file=(csv, "test.csv"))
+    assert r.status_code == 201
+
+    project_id = r.json["id"]
+    project_path = asreview_path() / project_id
+    asr_project = asr.Project(project_path, project_id=project_id)
+
+    # Determine which record_ids SHOULD be priors from the input data.
+    input_data = _get_input_data(project_id)
+    expected_prior_ids = set(
+        input_data.loc[input_data["included"].notnull(), "record_id"].tolist()
+    )
+
+    # The priors should be: 2 duplicate priors + 1 mixed dup prior + 1 solo = 4
+    assert len(expected_prior_ids) == 4
+
+    # Simulate a trained model by inserting a ranking for all records.
+    record_ids = asr_project.db.input["record_id"].tolist()
+    with asr_project.db as db:
+        db.add_last_ranking(record_ids, "nb", "max", "double", "tfidf", 1)
+
+    # Screen all records; none should be a prior or a duplicate of a prior.
+    seen_record_ids = set()
+    for _ in range(len(records)):
+        r = au.get_project_current_document(client, asr_project)
+        assert r.status_code == 200
+        result = r.json.get("result")
+        if result is None:
+            break
+        record_id = result["record_id"]
+        assert record_id not in expected_prior_ids, (
+            f"Prior record {record_id} was served during screening"
+        )
+        seen_record_ids.add(record_id)
+        au.label_project_record(client, asr_project, record_id, 0, prior=0)
+
+    # Only the group representatives of unlabeled groups should have been screened.
+    # Duplicates are hidden during screening (only the base record is shown).
+    expected_unlabeled = set(record_ids) - expected_prior_ids
+    assert seen_record_ids.issubset(expected_unlabeled)

@@ -1,0 +1,83 @@
+name: Test ASReview webapp
+on: [push, pull_request]
+jobs:
+  prettier:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: "asreview/webapp/package-lock.json"
+      - name: Install dependencies
+        run: |
+          cd asreview/webapp
+          npm install
+      - name: Run Prettier
+        run: |
+          cd asreview/webapp
+          npm run format
+  ruff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install ruff
+        run: |
+          pip install .[dev]
+      - name: Lint Python
+        run: |
+          ruff check asreview/webapp
+  compile-and-test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: "asreview/webapp/package-lock.json"
+      - name: Install setuptools
+        run: |
+          pip install setuptools
+      - name: Compile assets
+        run: |
+          python setup.py compile_assets
+      - name: Install pytest and package
+        run: |
+          pip install pytest pytest-random-order pytest-xdist
+          pip install --no-cache-dir .
+      - name: Cache synergy dataset
+        uses: actions/cache@v4
+        with:
+          path: ~/.synergy_dataset_source
+          key: synergy-dataset-${{ runner.os }}-v1.0
+      - name: Download synergy dataset
+        run: |
+          python -c "
+          from synergy_dataset.base import _dataset_available, download_raw_dataset
+          if not _dataset_available():
+              try:
+                  download_raw_dataset(source='dataverse')
+              except Exception:
+                  download_raw_dataset(source='github')
+          print('Synergy dataset available:', _dataset_available())
+          "
+      - name: Test flask web app
+        run: |
+          pytest --random-order -n 6 asreview/webapp/tests

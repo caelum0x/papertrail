@@ -5,6 +5,7 @@ import { verifyClaim } from "@/lib/agents/verificationAgent";
 import { checkRateLimit } from "@/lib/rateLimit";
 import { reconcile } from "@/lib/effectSize";
 import { logEvent } from "@/lib/logger";
+import { sanitizeClaimText } from "@/lib/api/claimInput";
 
 export const runtime = "nodejs";
 
@@ -49,24 +50,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
   }
 
-  const claim = body.claim?.trim();
-  if (!claim || claim.length < MIN_CLAIM_CHARS) {
+  const sanitizedClaim = sanitizeClaimText(body.claim);
+  if (!sanitizedClaim.ok) {
+    return NextResponse.json({ error: sanitizedClaim.error }, { status: 400 });
+  }
+  const claim = sanitizedClaim.value;
+  if (claim.length < MIN_CLAIM_CHARS) {
     return NextResponse.json(
       { error: `Please provide a claim of at least ${MIN_CLAIM_CHARS} characters.` },
       { status: 400 }
     );
   }
 
-  const sourceText = body.source_text?.trim();
-  if (!sourceText || sourceText.length < MIN_SOURCE_CHARS) {
+  const sanitizedSource = sanitizeClaimText(body.source_text, {
+    maxLength: MAX_SOURCE_CHARS,
+    tooLongError: `Source text is too long (max ${MAX_SOURCE_CHARS} characters). Paste an abstract or a focused passage.`,
+  });
+  if (!sanitizedSource.ok) {
+    return NextResponse.json({ error: sanitizedSource.error }, { status: 400 });
+  }
+  const sourceText = sanitizedSource.value;
+  if (sourceText.length < MIN_SOURCE_CHARS) {
     return NextResponse.json(
       { error: `Please paste source text of at least ${MIN_SOURCE_CHARS} characters.` },
-      { status: 400 }
-    );
-  }
-  if (sourceText.length > MAX_SOURCE_CHARS) {
-    return NextResponse.json(
-      { error: `Source text is too long (max ${MAX_SOURCE_CHARS} characters). Paste an abstract or a focused passage.` },
       { status: 400 }
     );
   }

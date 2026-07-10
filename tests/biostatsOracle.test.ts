@@ -36,6 +36,23 @@ describe("riskRatioFromCounts — epidemiology oracle", () => {
     expect(r.riskRatio).toBeLessThan(1);
   });
 
+  it("zero events in BOTH arms → RR ~1.0 with a very wide, null-crossing CI", () => {
+    // Documents the double-zero edge case: after the Haldane–Anscombe correction
+    // a=c=0.5 and n1=n2=101, so RR = (0.5/101)/(0.5/101) = 1.0 exactly. SE(ln RR)
+    // = sqrt(1/0.5 - 1/101 + 1/0.5 - 1/101) ≈ 1.995, giving CI ≈ 0.02–54.6 on the
+    // ratio scale — the null of no difference is preserved despite extreme uncertainty.
+    const r = riskRatioFromCounts(0, 100, 0, 100)!;
+    expect(r).not.toBeNull();
+    expect(r.riskRatio).toBeCloseTo(1.0, 3);
+    expect(r.reductionPercent).toBeCloseTo(0, 1);
+    // Very wide CI: lower well below 1, upper far above 1.
+    expect(r.ciLower).toBeCloseTo(0.02, 2);
+    expect(r.ciUpper).toBeGreaterThan(45);
+    expect(r.ciLower).toBeLessThan(1);
+    expect(r.ciUpper).toBeGreaterThan(1);
+    expect(r.significant).toBe(false);
+  });
+
   it("returns null for unusable inputs", () => {
     expect(riskRatioFromCounts(5, 0, 3, 10)).toBeNull();
     expect(riskRatioFromCounts(-1, 10, 2, 10)).toBeNull();

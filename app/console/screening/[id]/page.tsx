@@ -18,6 +18,7 @@ import { ImportPanel } from "../_components/ImportPanel";
 import { StageTabs, STAGE_TABS } from "../_components/StageTabs";
 import { RecordCard } from "../_components/RecordCard";
 import { Pagination } from "../_components/Pagination";
+import { AiRankPanel } from "../_components/AiRankPanel";
 
 const PAGE_SIZE = 20;
 
@@ -223,6 +224,12 @@ export default function ScreeningQueuePage() {
 
       {project ? (
         <InclusionCriteria criteria={project.inclusionCriteria} />
+      ) : null}
+
+      {id && tab === "title" ? (
+        <div className="mt-4">
+          <AiRankPanel projectId={id} />
+        </div>
       ) : null}
 
       {showImport ? (

@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 
 interface SessionOrg {
   id: string;
@@ -19,37 +20,77 @@ interface SessionUser {
 
 const NAV_SECTIONS: { title: string; links: { href: string; label: string }[] }[] = [
   {
-    title: "Workspace",
+    title: "Home",
     links: [
       { href: "/console", label: "Overview" },
       { href: "/console/projects", label: "Projects" },
-      { href: "/console/claims", label: "Claims" },
-      { href: "/console/verify", label: "Verify" },
-      { href: "/console/documents", label: "Documents" },
-      { href: "/console/evidence", label: "Evidence" },
-      { href: "/console/references", label: "References" },
       { href: "/console/search", label: "Search" },
     ],
   },
   {
-    title: "Research",
+    title: "AI Research",
     links: [
-      { href: "/console/workflows", label: "Workflows" },
+      { href: "/console/copilot", label: "Research Copilot" },
+      { href: "/console/ask", label: "Ask the Papers" },
+      { href: "/console/deep-research", label: "Deep Research" },
+      { href: "/console/data-chat", label: "Data Chat" },
+      { href: "/console/guideline-audit", label: "Guideline Audit" },
+      { href: "/console/draft", label: "Draft Assistant" },
       { href: "/console/science", label: "Claude Science" },
-      { href: "/console/screening", label: "Screening" },
-      { href: "/console/evaluation", label: "Evaluation" },
-      { href: "/console/monitoring", label: "Monitoring" },
-      { href: "/console/signals", label: "Signals" },
-      { href: "/console/publications", label: "Publications" },
     ],
   },
   {
-    title: "Review & report",
+    title: "Bench & clinic",
     links: [
+      { href: "/console/lab-notebook", label: "Lab Notebook" },
+      { href: "/console/trial-matcher", label: "Trial Matcher" },
+    ],
+  },
+  {
+    title: "Evidence synthesis",
+    links: [
+      { href: "/console/verify", label: "Verify a claim" },
+      { href: "/console/workbench", label: "Evidence Workbench" },
+      { href: "/console/evidence-report", label: "Evidence Report" },
+      { href: "/console/synthesis", label: "Meta-analysis" },
+      { href: "/console/synthesis-report", label: "Synthesis Report" },
+      { href: "/console/extraction", label: "Paper Extraction" },
+      { href: "/console/citations", label: "Smart Citations" },
+      { href: "/console/graph", label: "Knowledge Graph" },
+      { href: "/console/hypotheses", label: "Research Gaps" },
+    ],
+  },
+  {
+    title: "Systematic review",
+    links: [
+      { href: "/console/prisma", label: "PRISMA Autopilot" },
+      { href: "/console/screening", label: "Screening" },
       { href: "/console/reviews", label: "Reviews" },
-      { href: "/console/activity", label: "Activity" },
+      { href: "/console/publications", label: "Publications" },
+      { href: "/console/alerts", label: "Evidence Alerts" },
+      { href: "/console/monitoring", label: "Monitoring" },
+      { href: "/console/signals", label: "Signals" },
+    ],
+  },
+  {
+    title: "Library",
+    links: [
+      { href: "/console/claims", label: "Claims" },
+      { href: "/console/documents", label: "Documents" },
+      { href: "/console/evidence", label: "Evidence" },
+      { href: "/console/evidence-reports", label: "Saved Reports" },
+      { href: "/console/references", label: "References" },
+    ],
+  },
+  {
+    title: "Report & analyze",
+    links: [
       { href: "/console/reports", label: "Reports" },
       { href: "/console/analytics", label: "Analytics" },
+      { href: "/console/analytics/evidence-reports", label: "Evidence Analytics" },
+      { href: "/console/evaluation", label: "Evaluation" },
+      { href: "/console/workflows", label: "Workflows" },
+      { href: "/console/activity", label: "Activity" },
     ],
   },
   {
@@ -146,7 +187,8 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
     <div className="min-h-screen bg-paper flex">
       <aside className="w-56 shrink-0 border-r border-ink/15 bg-white flex flex-col">
         <div className="h-14 flex items-center px-4 border-b border-ink/15">
-          <Link href="/console" className="font-semibold text-ink/80">
+          <Link href="/console" className="flex items-center gap-2 font-semibold text-ink/80">
+            <Image src="/logo.png" alt="PaperTrail" width={30} height={20} className="h-6 w-auto" />
             PaperTrail
           </Link>
         </div>
