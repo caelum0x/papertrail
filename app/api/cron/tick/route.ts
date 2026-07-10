@@ -3,6 +3,9 @@ import { ok, fail } from "@/lib/api/response";
 import { getPool } from "@/lib/db";
 import { processTick } from "@/lib/jobs/queue";
 import { logEvent } from "@/lib/logger";
+import { runOrgSecurityScan } from "@/lib/security/securityScan";
+import { purgeOrgRetention } from "@/lib/governance/retentionPurge";
+import { sweepChainIntegrity } from "@/lib/compliance/chainIntegrity";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,10 +58,23 @@ export async function GET(req: NextRequest) {
         // One org's failure must not abort the whole sweep.
         logEvent("cron.tick.org_error", { orgId: id, message: err instanceof Error ? err.message : "unknown" });
       }
+      // Enterprise daily sweeps folded into the single Vercel-Hobby cron (best-effort;
+      // a failure here never aborts the job tick). Threat detection + retention purge
+      // run per org; chain integrity is swept once after the loop.
+      try { await runOrgSecurityScan(pool, id); } catch { /* best-effort */ }
+      try { await purgeOrgRetention(id, pool); } catch { /* best-effort */ }
     }
 
-    logEvent("cron.tick.done", { ...totals, latencyMs: Date.now() - start });
-    return ok(totals);
+    let chainIntegrity: { ok: number; broken: number } | null = null;
+    try {
+      const sweep = await sweepChainIntegrity(rows.map((r) => r.id), pool);
+      chainIntegrity = { ok: sweep.ok, broken: sweep.broken };
+    } catch {
+      /* best-effort: integrity sweep never fails the tick */
+    }
+
+    logEvent("cron.tick.done", { ...totals, chainIntegrity, latencyMs: Date.now() - start });
+    return ok({ ...totals, chainIntegrity });
   } catch {
     return fail("Cron tick failed.", 500);
   }

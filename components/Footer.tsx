@@ -18,6 +18,9 @@ export function Footer() {
             <Link href="/connect" className="hover:text-ink">
               Claude Science
             </Link>
+            <Link href="/security" className="hover:text-ink">
+              Security
+            </Link>
             <Link href="/api-docs" className="hover:text-ink">
               API
             </Link>

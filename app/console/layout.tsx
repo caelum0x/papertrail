@@ -113,6 +113,9 @@ const NAV_SECTIONS: { title: string; links: { href: string; label: string }[] }[
     title: "Governance",
     links: [
       { href: "/console/compliance", label: "Compliance" },
+      { href: "/console/compliance/controls", label: "Controls" },
+      { href: "/console/admin/security", label: "Security (XDR)" },
+      { href: "/console/billing/tier", label: "Plan & Tiers" },
       { href: "/console/audit", label: "Audit" },
       { href: "/console/settings", label: "Settings" },
       { href: "/console/admin", label: "Admin" },

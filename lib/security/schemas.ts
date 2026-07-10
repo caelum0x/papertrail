@@ -69,3 +69,22 @@ export const createIpAllowlistSchema = z.object({
 });
 
 export type CreateIpAllowlistInput = z.infer<typeof createIpAllowlistSchema>;
+
+// ---------------------------------------------------------------------------
+// Threat-detection ("XDR") read API. The severity query filter is validated
+// against the fixed enum so an invalid value fails fast (400) rather than
+// silently returning everything or reaching the DB with junk input.
+// ---------------------------------------------------------------------------
+
+export const SECURITY_EVENT_SEVERITIES = [
+  "low",
+  "medium",
+  "high",
+  "critical",
+] as const;
+
+export const securityEventsQuerySchema = z.object({
+  severity: z.enum(SECURITY_EVENT_SEVERITIES).optional(),
+});
+
+export type SecurityEventsQuery = z.infer<typeof securityEventsQuerySchema>;
