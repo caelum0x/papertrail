@@ -4,6 +4,7 @@ python/
 reference/
 .claude/
 *.log
-# MCP connector package + Claude Science skills — shipped to GitHub, not to the web app
-mcp/
-skills/
+# MCP connector package + Claude Science skills — shipped to GitHub, not to the web app.
+# Anchored to root (leading slash) so they do NOT also match app/api/mcp or lib/mcp.
+/mcp/
+/skills/
