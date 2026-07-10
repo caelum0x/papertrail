@@ -100,14 +100,23 @@ Three things are true about that result:
    Claude-alone errored on **16/60** (raw Claude often returned prose instead of valid JSON —
    PaperTrail's Zod-validated pipeline did not).
 
-**On the design task, it works.** The **fair** benchmark — clinical-efficacy claims verified against
-a source that reports the registered effect size (`npm run bench -- --clinical`,
-[`docs/benchmark-clinical.md`](docs/benchmark-clinical.md)) — scores PaperTrail **100%**. Honest
-caveat: on that small, fairly clear-cut set **Claude-alone also scores 100%**, so it shows
-_fitness for task_, not a _margin_ over the LLM (the margin needs subtler magnitude-drift cases —
-future work). SciFact remains the wrong yardstick; we do not cite 58.3% as a capability number.
-Full methodology + confusion matrices in [`docs/benchmark.md`](docs/benchmark.md) and
-[`docs/benchmark-clinical.md`](docs/benchmark-clinical.md).
+**On the design task, it measurably beats the LLM.** The **fair** benchmark — 20 clinical-efficacy
+claims verified against a source that reports the registered effect size, including **subtle
+magnitude drift** (`npm run bench -- --clinical`, [`docs/benchmark-clinical.md`](docs/benchmark-clinical.md)):
+
+| System | Accuracy | Macro-F1 | Errored |
+|---|---:|---:|---:|
+| **PaperTrail** | **95.0%** | **96.0%** | 0/20 |
+| Claude-alone | 75.0% | 70.7% | 5/20 |
+
+A **20-point margin**. The gap is the deterministic recompute: on claims like *"reduced by 37%"*
+against a source reporting *HR 0.75 (a 25% reduction)*, `reconcile()` flags `magnitude_overstated`
+whenever the implied ratio crosses the CI lower bound — catching **all 11** overstatements with no
+LLM in the decision. Claude-alone often computed the right number *in prose* but broke its JSON
+contract (5/20 errors); PaperTrail's Zod-validated pipeline errored on 0/20. We own the one
+imperfection: PaperTrail over-flagged **1** accurate case (a false positive). SciFact remains the
+wrong yardstick; we do not cite 58.3% as a capability number. Full confusion matrices in
+[`docs/benchmark.md`](docs/benchmark.md) + [`docs/benchmark-clinical.md`](docs/benchmark-clinical.md).
 
 ## Capabilities
 

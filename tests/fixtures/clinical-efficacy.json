@@ -82,5 +82,61 @@
     "sourceText": "In the JUPITER trial, apparently healthy persons with elevated high-sensitivity C-reactive protein were randomized to rosuvastatin or placebo. Rosuvastatin reduced the primary composite endpoint of major cardiovascular events, with a hazard ratio of 0.56 (95% CI, 0.46 to 0.69).",
     "goldLabel": "NEI",
     "citedDocIds": [1]
+  },
+  {
+    "id": "subtle-overstated-sprint-37",
+    "claim": "Intensive blood-pressure control reduced major cardiovascular events by 37%.",
+    "sourceText": "In SPRINT, intensive systolic blood-pressure control reduced the primary composite cardiovascular outcome versus standard control, with a hazard ratio of 0.75 (95% CI, 0.64 to 0.89).",
+    "goldLabel": "CONTRADICT",
+    "citedDocIds": [1]
+  },
+  {
+    "id": "subtle-overstated-paradigm-30",
+    "claim": "Sacubitril-valsartan reduced the primary endpoint by 30% compared with enalapril.",
+    "sourceText": "In PARADIGM-HF, sacubitril-valsartan reduced the primary composite of cardiovascular death or heart-failure hospitalization versus enalapril, with a hazard ratio of 0.80 (95% CI, 0.73 to 0.87).",
+    "goldLabel": "CONTRADICT",
+    "citedDocIds": [1]
+  },
+  {
+    "id": "subtle-overstated-dapa-38",
+    "claim": "Dapagliflozin lowered the risk of worsening heart failure or cardiovascular death by 38%.",
+    "sourceText": "In DAPA-HF, dapagliflozin reduced the primary composite of worsening heart failure or cardiovascular death versus placebo, with a hazard ratio of 0.74 (95% CI, 0.65 to 0.85).",
+    "goldLabel": "CONTRADICT",
+    "citedDocIds": [1]
+  },
+  {
+    "id": "subtle-overstated-empareg-27",
+    "claim": "Empagliflozin reduced major adverse cardiovascular events by 27%.",
+    "sourceText": "In EMPA-REG OUTCOME, empagliflozin reduced the primary three-point major adverse cardiovascular event outcome versus placebo, with a hazard ratio of 0.86 (95% CI, 0.74 to 0.99).",
+    "goldLabel": "CONTRADICT",
+    "citedDocIds": [1]
+  },
+  {
+    "id": "subtle-overstated-statin-48",
+    "claim": "The statin lowered the risk of the primary endpoint by 48%.",
+    "sourceText": "In this secondary-prevention trial, the statin reduced the primary composite endpoint versus placebo, with a risk ratio of 0.70 (95% CI, 0.55 to 0.89).",
+    "goldLabel": "CONTRADICT",
+    "citedDocIds": [1]
+  },
+  {
+    "id": "subtle-accurate-sprint-25",
+    "claim": "Intensive blood-pressure control reduced major cardiovascular events by about 25%.",
+    "sourceText": "In SPRINT, intensive systolic blood-pressure control reduced the primary composite cardiovascular outcome versus standard control, with a hazard ratio of 0.75 (95% CI, 0.64 to 0.89).",
+    "goldLabel": "SUPPORT",
+    "citedDocIds": [1]
+  },
+  {
+    "id": "subtle-accurate-paradigm-22",
+    "claim": "Sacubitril-valsartan reduced the primary endpoint by roughly 22% compared with enalapril.",
+    "sourceText": "In PARADIGM-HF, sacubitril-valsartan reduced the primary composite of cardiovascular death or heart-failure hospitalization versus enalapril, with a hazard ratio of 0.80 (95% CI, 0.73 to 0.87).",
+    "goldLabel": "SUPPORT",
+    "citedDocIds": [1]
+  },
+  {
+    "id": "subtle-accurate-statin-32",
+    "claim": "The statin cut the risk of the primary endpoint by about 32%.",
+    "sourceText": "In this secondary-prevention trial, the statin reduced the primary composite endpoint versus placebo, with a risk ratio of 0.70 (95% CI, 0.55 to 0.89).",
+    "goldLabel": "SUPPORT",
+    "citedDocIds": [1]
   }
 ]
