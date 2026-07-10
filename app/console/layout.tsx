@@ -79,6 +79,7 @@ const NAV_SECTIONS: { title: string; links: { href: string; label: string }[] }[
     links: [
       { href: "/console/claims", label: "Claims" },
       { href: "/console/documents", label: "Documents" },
+      { href: "/console/sources/ingest", label: "Source Ingest" },
       { href: "/console/evidence", label: "Evidence" },
       { href: "/console/evidence-reports", label: "Saved Reports" },
       { href: "/console/references", label: "References" },
