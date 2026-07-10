@@ -163,12 +163,22 @@ export async function getMarkersForCellType(
     source: string | null;
     pmid: string | null;
   }>(
+    // Exact CURIE / exact label first; then a contains-match either direction so a
+    // shorthand ("CD8 memory-like") resolves to the curated label ("CD8 memory-like
+    // T cell") and vice versa. Still deterministic — a substring of a curated label,
+    // never a fabricated concept. The exact matches are preferred via the ORDER BY.
     `select cell_type_curie, cell_type_label, gene_curie, gene_symbol,
-            direction, tissue_curie, source, pmid
+            direction, tissue_curie, source, pmid,
+            case
+              when cell_type_curie = $1 or lower(cell_type_label) = lower($1) then 0
+              else 1
+            end as match_rank
        from cell_marker_panels
       where cell_type_curie = $1
          or lower(cell_type_label) = lower($1)
-      order by gene_symbol asc nulls last`,
+         or lower(cell_type_label) like '%' || lower($1) || '%'
+         or lower($1) like '%' || lower(cell_type_label) || '%'
+      order by match_rank asc, gene_symbol asc nulls last`,
     [key]
   );
 
