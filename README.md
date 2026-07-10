@@ -82,27 +82,28 @@ the trial actually registered**:
 
 We would rather be honest than impressive.
 
-**Smoke test (10-case SciFact, `claude-sonnet-4-6`):** PaperTrail scored **20%** accuracy vs a
-**Claude-alone** baseline at **60%**. **PaperTrail lost.** We are not hiding it.
+**Benchmark (balanced 60-case SciFact, 20/20/20, `claude-sonnet-4-6`):** PaperTrail scored **58.3%**
+accuracy vs a **Claude-alone** baseline at **70.0%**. **On SciFact, PaperTrail loses.** We are not
+hiding it. (This supersedes an earlier invalid 10-case smoke that had sliced a single gold label.)
 
-Two things are true about that result:
+Three things are true about that result:
 
-1. **The slice was unrepresentative** — the 10 cases were all a single gold label (SUPPORT),
-   because it sliced the top of the fixture (the full curated set is balanced 20/20/20). A
-   single-label 10-case run measures almost nothing.
-2. **The real, own-it limitation: it's a task mismatch.** [SciFact](https://github.com/allenai/scifact)
-   tests *general scientific-claim entailment* (molecular mechanisms, associations). PaperTrail's
-   engine is tuned for the **opposite** task — clinical-trial **efficacy-magnitude** verification
-   (recompute "reduced events by 30%" against a registry). On SciFact claims it **over-flags
-   discrepancies**, mapping SUPPORT → CONTRADICT, and scores worse than a plain LLM. That is a
-   genuine limitation of applying this engine outside its design envelope.
+1. **It's a task mismatch — the own-it limitation.** [SciFact](https://github.com/allenai/scifact)
+   tests *general scientific-claim entailment* (mechanisms, associations). PaperTrail's engine is
+   tuned for the **opposite** task — clinical-trial **efficacy-magnitude** verification (recompute
+   "reduced events by 30%" against a registry). The confusion matrix is unambiguous: **SUPPORT
+   recall 10%, CONTRADICT recall 90%** — it aggressively over-flags and maps SUPPORT → CONTRADICT.
+   Outside its design envelope, it over-flags. That's a genuine limitation.
+2. **Its honest-abstention holds up:** NEI F1 **73.2** (precision 71.4) — when it can't verify, it
+   says so rather than guessing.
+3. **It's far more reliable than the raw baseline:** PaperTrail errored on **2/60** cases;
+   Claude-alone errored on **16/60** (raw Claude often returned prose instead of valid JSON —
+   PaperTrail's Zod-validated pipeline did not).
 
-**Conclusion:** SciFact is the wrong yardstick for PaperTrail, and we do **not** cite that number
-as proof of anything. A fair benchmark must use **clinical-efficacy claims** (see
-`tests/fixtures/test-claims.json`) where recompute-from-registry actually applies. The benchmark
-harness (`npm run bench`, methodology in [`docs/benchmark.md`](docs/benchmark.md)) is deterministic,
-scores per-case failures as an honest NEI, and splices its results between `BENCH:RESULTS` markers
-— with a **"do not cite"** banner on the current smoke run.
+**Conclusion:** SciFact is the wrong yardstick for PaperTrail, and we do **not** cite 58.3% as a
+headline capability number — it's the conservative floor on a mismatched task. A fair benchmark
+uses **clinical-efficacy claims** (`tests/fixtures/test-claims.json`) where recompute-from-registry
+actually applies. Full methodology + confusion matrices in [`docs/benchmark.md`](docs/benchmark.md).
 
 ## Capabilities
 

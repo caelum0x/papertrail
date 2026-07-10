@@ -13,25 +13,17 @@ below is fixed.
 
 <!-- BENCH:RESULTS:START -->
 
-> ⚠️ **DO NOT CITE THE RUN BELOW.** It is an invalid smoke run: only 10 cases, and they
-> are all a single gold label (SUPPORT), because it sliced the top of the fixture. More
-> fundamentally, **SciFact is a task mismatch** — it tests general scientific-claim
-> entailment (mechanisms/associations), whereas PaperTrail's engine verifies clinical-trial
-> *efficacy-magnitude* claims (recompute-from-registry). PaperTrail aggressively flags
-> discrepancies, which maps SUPPORT→CONTRADICT here. A fair benchmark must use clinical
-> efficacy claims (see tests/fixtures/test-claims.json), not SciFact.
-
 ### Latest run
 
-- Dataset: **SciFact curated sample (committed)** (10 case(s))
-- Generated: 2026-07-10T10:35:34.788Z
+- Dataset: **SciFact curated sample (committed)** (60 case(s))
+- Generated: 2026-07-10T22:32:17.331Z
 
 #### Headline comparison
 
 | System | Accuracy | Macro-F1 | Micro-F1 | Errored (scored NEI) | N |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| PaperTrail | 20.0% | 11.1% | 20.0% | 0 | 10 |
-| Claude-alone | 60.0% | 25.0% | 60.0% | 3 | 10 |
+| PaperTrail | 58.3% | 51.5% | 58.3% | 2 | 60 |
+| Claude-alone | 70.0% | 70.4% | 70.0% | 16 | 60 |
 
 #### Per-system breakdown
 
@@ -39,40 +31,64 @@ below is fixed.
 
 | Label | Precision | Recall | F1 | Support |
 | --- | ---: | ---: | ---: | ---: |
-| SUPPORT | 100.0 | 20.0 | 33.3 | 10 |
-| CONTRADICT | 0.0 | 0.0 | 0.0 | 0 |
-| NEI | 0.0 | 0.0 | 0.0 | 0 |
-| **macro** | | | 11.1 | 10 |
-| **micro** | | | 20.0 | 10 |
+| SUPPORT | 100.0 | 10.0 | 18.2 | 20 |
+| CONTRADICT | 48.6 | 90.0 | 63.2 | 20 |
+| NEI | 71.4 | 75.0 | 73.2 | 20 |
+| **macro** | | | 51.5 | 60 |
+| **micro** | | | 58.3 | 60 |
 
 | gold ↓ / pred → | SUPPORT | CONTRADICT | NEI |
 | --- | ---: | ---: | ---: |
-| SUPPORT | 2 | 7 | 1 |
-| CONTRADICT | 0 | 0 | 0 |
-| NEI | 0 | 0 | 0 |
+| SUPPORT | 2 | 14 | 4 |
+| CONTRADICT | 0 | 18 | 2 |
+| NEI | 0 | 5 | 15 |
 
-**Accuracy:** 20.0%  ·  **Macro-F1:** 11.1%  ·  **Micro-F1:** 20.0%  ·  **N:** 10
+**Accuracy:** 58.3%  ·  **Macro-F1:** 51.5%  ·  **Micro-F1:** 58.3%  ·  **N:** 60
 
 ### Claude-alone
 
 | Label | Precision | Recall | F1 | Support |
 | --- | ---: | ---: | ---: | ---: |
-| SUPPORT | 100.0 | 60.0 | 75.0 | 10 |
-| CONTRADICT | 0.0 | 0.0 | 0.0 | 0 |
-| NEI | 0.0 | 0.0 | 0.0 | 0 |
-| **macro** | | | 25.0 | 10 |
-| **micro** | | | 60.0 | 10 |
+| SUPPORT | 85.7 | 60.0 | 70.6 | 20 |
+| CONTRADICT | 78.9 | 75.0 | 76.9 | 20 |
+| NEI | 55.6 | 75.0 | 63.8 | 20 |
+| **macro** | | | 70.4 | 60 |
+| **micro** | | | 70.0 | 60 |
 
 | gold ↓ / pred → | SUPPORT | CONTRADICT | NEI |
 | --- | ---: | ---: | ---: |
-| SUPPORT | 6 | 0 | 4 |
-| CONTRADICT | 0 | 0 | 0 |
-| NEI | 0 | 0 | 0 |
+| SUPPORT | 12 | 1 | 7 |
+| CONTRADICT | 0 | 15 | 5 |
+| NEI | 2 | 3 | 15 |
 
-**Accuracy:** 60.0%  ·  **Macro-F1:** 25.0%  ·  **Micro-F1:** 60.0%  ·  **N:** 10
+**Accuracy:** 70.0%  ·  **Macro-F1:** 70.4%  ·  **Micro-F1:** 70.0%  ·  **N:** 60
 
 
 <!-- BENCH:RESULTS:END -->
+
+## What the latest run means (read this)
+
+The run above is the **valid, balanced 60-case** committed sample (20 SUPPORT / 20 CONTRADICT /
+20 NEI) — it supersedes an earlier invalid 10-case smoke that had sliced a single gold label.
+The honest headline:
+
+- **PaperTrail 58.3% accuracy** vs **Claude-alone 70.0%**. On SciFact, PaperTrail **loses** — and
+  we are not hiding it.
+- **Why:** the confusion matrix is unambiguous. PaperTrail's **SUPPORT recall is 10%** and its
+  **CONTRADICT recall is 90%** — it aggressively flags discrepancies and maps SUPPORT → CONTRADICT.
+  That is exactly the behavior of an engine tuned for the **opposite** task: clinical-trial
+  **efficacy-magnitude** verification ("reduced events by 30%" recomputed against a registry), not
+  general scientific-claim entailment (mechanisms, associations). SciFact is a **task mismatch**;
+  applied outside its design envelope, the engine over-flags. We own that.
+- **Two things do hold up, even here:** PaperTrail's **honest-abstention** is strong (NEI F1 73.2,
+  precision 71.4 — when it can't verify, it says so), and it is far more **reliable** than the raw
+  baseline — PaperTrail errored on **2/60** cases vs Claude-alone's **16/60** (raw Claude often
+  returned prose instead of valid JSON; PaperTrail's Zod-validated pipeline did not).
+
+**Bottom line:** we do **not** cite 58.3% as a headline capability number — it is the conservative
+floor on a mismatched task. A fair benchmark uses **clinical-efficacy claims**
+(`tests/fixtures/test-claims.json`), where recompute-from-registry actually applies and the
+deterministic differentiator is exercised. Building that harness is tracked in the roadmap.
 
 ## Methodology
 
