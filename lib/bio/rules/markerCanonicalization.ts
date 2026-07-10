@@ -94,10 +94,27 @@ export async function getMarkersForCellType(
         [canonical.curie]
       )
     : await pool.query(
+        // Resolve to the SINGLE best-matching curated cell-type label (exact first, then a
+        // contains-match either direction so a shorthand like "CD8 memory-like" finds the
+        // curated "CD8 memory-like T cell"), then return that one cell type's markers. The
+        // inner pick prevents a loose match from mixing panels across cell types.
         `select cell_type_curie, cell_type_label, gene_curie, gene_symbol,
                 direction, source, pmid
            from cell_marker_panels
-          where lower(cell_type_label) = lower($1)`,
+          where cell_type_label = (
+            select cell_type_label
+              from cell_marker_panels
+             where lower(cell_type_label) = lower($1)
+                or lower(cell_type_label) like '%' || lower($1) || '%'
+                or lower($1) like '%' || lower(cell_type_label) || '%'
+             order by case
+                        when lower(cell_type_label) = lower($1) then 0
+                        when lower(cell_type_label) like '%' || lower($1) || '%' then 1
+                        else 2
+                      end,
+                      length(cell_type_label) asc
+             limit 1
+          )`,
         [surface]
       );
 
