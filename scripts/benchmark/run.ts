@@ -11,6 +11,7 @@ import { ExtractedFindingSchema, VerificationResultSchema } from "@/lib/schemas"
 import { groundVerificationResult } from "@/lib/grounding";
 import { reconcile } from "@/lib/effectSize";
 import { factCheck, isMiniCheckEnabled } from "@/lib/engines/minicheck";
+import { orchestrate } from "@/lib/moa/orchestrate";
 
 import type { BenchmarkCase, GoldLabel } from "@/lib/eval/benchmarkTypes";
 import {
@@ -207,6 +208,37 @@ async function runMiniCheck(sourceText: string, claim: string): Promise<GoldLabe
   const verdict = result.results[0];
   if (!verdict) return "NEI";
   return verdict.supported ? "SUPPORT" : "CONTRADICT";
+}
+
+// --- (4) Mixture of Agents (optional) ---------------------------------------
+
+// Map the MoA's aggregate verdict onto the benchmark's 3-way label. A "mixed"
+// (contested) verdict on an efficacy claim is driven by a real distortion the
+// composition surfaced (e.g. the magnitude reconciler dissenting from the entailment
+// vote), so it maps to CONTRADICT — the tool would flag it — rather than SUPPORT.
+const MOA_VERDICT_TO_LABEL: Record<string, GoldLabel> = {
+  supported: "SUPPORT",
+  refuted: "CONTRADICT",
+  mixed: "CONTRADICT",
+  insufficient: "NEI",
+};
+
+/**
+ * Run the full Mixture-of-Agents composition against one case's single source and map
+ * the deterministic aggregate verdict to a SUPPORT/CONTRADICT/NEI label. This exercises
+ * the whole DAG (enrichers -> verifiers incl. the deterministic magnitude reconciler ->
+ * deliberation -> deterministic mix); the verdict is never LLM-decided.
+ */
+async function runMoA(sourceText: string, claim: string): Promise<GoldLabel> {
+  const result = await orchestrate({
+    claim,
+    sources: [{ id: "s1", text: sourceText }],
+  });
+  return MOA_VERDICT_TO_LABEL[result.aggregate.verdict] ?? "NEI";
+}
+
+function isMoAEnabled(): boolean {
+  return process.env.MOA_ENABLED === "true";
 }
 
 // --- System registry ---------------------------------------------------------
@@ -452,6 +484,12 @@ async function main(): Promise<void> {
     process.stdout.write("MiniCheck enabled (MINICHECK_ENABLED=true).\n");
   } else {
     process.stdout.write("MiniCheck disabled (set MINICHECK_ENABLED=true to include it).\n");
+  }
+  if (isMoAEnabled()) {
+    systems.push({ name: "Mixture of Agents", predict: runMoA });
+    process.stdout.write("Mixture of Agents enabled (MOA_ENABLED=true).\n");
+  } else {
+    process.stdout.write("Mixture of Agents disabled (set MOA_ENABLED=true to include it).\n");
   }
   process.stdout.write("\n");
 

@@ -16,6 +16,7 @@ import r2r from "./agents/r2r";
 import minicheck from "./agents/minicheck";
 import multivers from "./agents/multivers";
 import pymare from "./agents/pymare";
+import magnitude from "./agents/magnitude";
 import valsci from "./agents/valsci";
 // Layer 3 · deliberation
 import storm from "./agents/storm";
@@ -41,6 +42,7 @@ export const AGENTS: readonly MoaAgent[] = [
   minicheck,
   multivers,
   pymare,
+  magnitude,
   valsci,
   storm,
   iterative,
