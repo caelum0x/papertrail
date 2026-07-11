@@ -1,0 +1,76 @@
+[
+  {
+    "id": "statins-mace-support",
+    "claim": "Statin therapy reduces the risk of major coronary events.",
+    "sources": [
+      { "id": "4s", "text": "The Scandinavian Simvastatin Survival Study (4S) randomized 4444 patients with coronary heart disease to simvastatin or placebo. Simvastatin reduced major coronary events, with a relative risk of 0.66 (95% CI 0.59 to 0.75) over a median 5.4 years." },
+      { "id": "care", "text": "The Cholesterol and Recurrent Events (CARE) trial randomized 4159 post-myocardial-infarction patients to pravastatin or placebo. The primary endpoint of fatal coronary event or nonfatal myocardial infarction was reduced with a relative risk of 0.76 (95% CI 0.64 to 0.91)." },
+      { "id": "lipid", "text": "The LIPID study randomized 9014 patients with prior coronary disease to pravastatin or placebo. Death from coronary heart disease was reduced, with a relative risk of 0.76 (95% CI 0.65 to 0.88)." }
+    ],
+    "goldLabel": "SUPPORT"
+  },
+  {
+    "id": "sglt2-hf-support",
+    "claim": "SGLT2 inhibitors reduce the composite of cardiovascular death or heart-failure hospitalization in patients with heart failure with reduced ejection fraction.",
+    "sources": [
+      { "id": "dapa-hf", "text": "In DAPA-HF, 4744 patients with heart failure and reduced ejection fraction were randomized to dapagliflozin or placebo. The primary composite of worsening heart failure or cardiovascular death occurred less often with dapagliflozin (hazard ratio 0.74, 95% CI 0.65 to 0.85)." },
+      { "id": "emperor-reduced", "text": "In EMPEROR-Reduced, 3730 patients with heart failure and reduced ejection fraction were randomized to empagliflozin or placebo. The primary composite of cardiovascular death or hospitalization for heart failure was reduced (hazard ratio 0.75, 95% CI 0.65 to 0.86)." }
+    ],
+    "goldLabel": "SUPPORT"
+  },
+  {
+    "id": "pcsk9-mace-support",
+    "claim": "PCSK9 inhibitors reduce major adverse cardiovascular events in patients with established atherosclerotic disease.",
+    "sources": [
+      { "id": "fourier", "text": "In the FOURIER trial, 27564 patients with atherosclerotic cardiovascular disease on statin therapy were randomized to evolocumab or placebo. The primary composite endpoint was reduced with evolocumab (hazard ratio 0.85, 95% CI 0.79 to 0.92)." },
+      { "id": "odyssey", "text": "In ODYSSEY OUTCOMES, 18924 patients with a recent acute coronary syndrome were randomized to alirocumab or placebo. Major adverse cardiovascular events were reduced (hazard ratio 0.85, 95% CI 0.78 to 0.93)." }
+    ],
+    "goldLabel": "SUPPORT"
+  },
+  {
+    "id": "niacin-cv-refuted",
+    "claim": "Adding niacin to statin therapy reduces major vascular events.",
+    "sources": [
+      { "id": "hps2-thrive", "text": "HPS2-THRIVE randomized 25673 patients with vascular disease on statin therapy to extended-release niacin plus laropiprant or placebo. There was no significant reduction in major vascular events (hazard ratio 0.96, 95% CI 0.90 to 1.03), and niacin caused a significant excess of serious adverse events." },
+      { "id": "aim-high", "text": "The AIM-HIGH trial randomized 3414 patients with atherosclerotic cardiovascular disease on statin therapy to extended-release niacin or placebo. The trial was stopped early for futility; the primary composite endpoint showed no benefit (hazard ratio 1.02, 95% CI 0.87 to 1.21)." }
+    ],
+    "goldLabel": "CONTRADICT"
+  },
+  {
+    "id": "intensive-bp-diabetes-refuted",
+    "claim": "Intensive blood-pressure control to a target below 120 mm Hg reduces major cardiovascular events in patients with type 2 diabetes.",
+    "sources": [
+      { "id": "sprint", "text": "SPRINT randomized 9361 adults at high cardiovascular risk but WITHOUT diabetes to intensive (target <120 mm Hg) versus standard blood-pressure control. Intensive treatment reduced the primary composite cardiovascular outcome (hazard ratio 0.75, 95% CI 0.64 to 0.89). Patients with diabetes were excluded." },
+      { "id": "accord-bp", "text": "The ACCORD-BP trial randomized 4733 patients WITH type 2 diabetes to intensive (target <120 mm Hg) versus standard blood-pressure control. Intensive control did not significantly reduce the primary composite of nonfatal myocardial infarction, nonfatal stroke, or cardiovascular death (hazard ratio 0.88, 95% CI 0.73 to 1.06)." }
+    ],
+    "goldLabel": "CONTRADICT"
+  },
+  {
+    "id": "hrt-chd-refuted",
+    "claim": "Hormone replacement therapy reduces the risk of coronary heart disease in postmenopausal women.",
+    "sources": [
+      { "id": "nurses-obs", "text": "In the observational Nurses' Health Study, current use of postmenopausal hormone therapy was associated with a lower risk of coronary heart disease, with an adjusted relative risk of approximately 0.61 compared with never-users." },
+      { "id": "whi", "text": "The Women's Health Initiative randomized 16608 postmenopausal women to estrogen plus progestin or placebo. Coronary heart disease events were INCREASED with hormone therapy (hazard ratio 1.24, 95% CI 1.00 to 1.54), not reduced." }
+    ],
+    "goldLabel": "CONTRADICT"
+  },
+  {
+    "id": "betacarotene-lungcancer-refuted",
+    "claim": "Beta-carotene supplementation reduces the risk of lung cancer.",
+    "sources": [
+      { "id": "observational", "text": "Observational cohort studies reported that higher dietary beta-carotene intake was associated with a lower incidence of lung cancer." },
+      { "id": "atbc", "text": "The ATBC trial randomized 29133 male smokers to beta-carotene or placebo. Lung cancer incidence was significantly INCREASED with beta-carotene (relative risk 1.18, 95% CI 1.03 to 1.36)." },
+      { "id": "caret", "text": "The CARET trial randomized 18314 smokers and asbestos-exposed workers to beta-carotene plus retinol or placebo. It was stopped early because lung cancer incidence was INCREASED (relative risk 1.28, 95% CI 1.04 to 1.57)." }
+    ],
+    "goldLabel": "CONTRADICT"
+  },
+  {
+    "id": "sglt2-class-cvdeath-overgeneralized",
+    "claim": "All SGLT2 inhibitors reduce cardiovascular death in patients with type 2 diabetes.",
+    "sources": [
+      { "id": "empa-reg", "text": "In EMPA-REG OUTCOME, empagliflozin reduced cardiovascular death compared with placebo in patients with type 2 diabetes and established cardiovascular disease (hazard ratio 0.62, 95% CI 0.49 to 0.77)." },
+      { "id": "declare", "text": "In DECLARE-TIMI 58, dapagliflozin did not significantly reduce cardiovascular death compared with placebo in patients with type 2 diabetes (hazard ratio 0.98, 95% CI 0.82 to 1.17)." }
+    ],
+    "goldLabel": "CONTRADICT"
+  }
+]
