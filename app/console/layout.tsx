@@ -52,6 +52,7 @@ const NAV_SECTIONS: { title: string; links: { href: string; label: string }[] }[
   {
     title: "Evidence synthesis",
     links: [
+      { href: "/console/orchestrator", label: "Mixture of Agents" },
       { href: "/console/verify", label: "Verify a claim" },
       { href: "/console/workbench", label: "Evidence Workbench" },
       { href: "/console/evidence-report", label: "Evidence Report" },
