@@ -22,9 +22,11 @@ interface CaptureProps {
 
 const MAX_NOTES = 20000;
 
-// Truncated placeholder — the full realistic example is one click away via "Try an example".
+// Short hint only — just enough to show the expected shorthand style. The full realistic
+// bench-notes example is one click away via "Try an example", so the placeholder stays a
+// clean, non-truncated prompt rather than a wall of text.
 const PLACEHOLDER =
-  "e.g. 6/12 — thawed HEK293T p12, seeded 2x10^5/well in 6-well. Next day transfected 2ug pcDNA3-TP53 w/ Lipofectamine 3000 per Thermo protocol. 48h harvested, western for p53 (CST #9282, 1:1000). Strong band ~53kDa in transfected, none in mock. Next: repeat w/ dose curve.";
+  "e.g. 6/12 — thawed HEK293T, transfected TP53, western for p53 (CST #9282, 1:1000)…";
 
 export function Capture({
   notes,

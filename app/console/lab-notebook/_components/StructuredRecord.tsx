@@ -7,11 +7,18 @@ import type {
   Sample,
   StructuredExperiment,
 } from "./types";
+import { checkReproducibility } from "@/lib/labNotebook/reproducibility";
+import { ReproducibilityHints } from "./ReproducibilityHints";
 
 // Renders a structured experiment record. Every field that quotes the raw notes is shown
 // with its verbatim grounded span underneath — the grounding is the whole point, so we
 // surface it, not hide it. Shared by StructuredPreview (before save) and ExperimentDetail
 // (a saved record), so it takes no callbacks and does no fetching.
+//
+// It also runs the deterministic reproducibility check (checkReproducibility) over the
+// same structured fields and surfaces any "add for reproducibility" hints up top. That
+// check makes no LLM call and invents no data — it only flags MISSING details — so it can
+// live purely in render with no extra state or fetch.
 
 const ENTITY_LABEL: Record<Entity["type"], string> = {
   gene: "Gene",
@@ -154,8 +161,12 @@ interface StructuredRecordProps {
 }
 
 export function StructuredRecord({ structured }: StructuredRecordProps) {
+  const reproducibility = checkReproducibility(structured);
+
   return (
     <div className="space-y-5">
+      <ReproducibilityHints report={reproducibility} />
+
       {structured.objective ? (
         <section>
           <div className="mb-1 flex items-center gap-2">

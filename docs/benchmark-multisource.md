@@ -9,7 +9,7 @@ _The fair test of the **Mixture of Agents**: each claim is judged against SEVERA
 
 | System | Accuracy | Macro-F1 | Micro-F1 | Errored (NEI) | N |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Mixture of Agents | 75.0% | 44.4% | 75.0% | 0 | 8 |
+| Mixture of Agents | 100.0% | 66.7% | 100.0% | 0 | 8 |
 | Claude-alone | 100.0% | 66.7% | 100.0% | 0 | 8 |
 
 ## Per-case predictions
@@ -17,8 +17,8 @@ _The fair test of the **Mixture of Agents**: each claim is judged against SEVERA
 | Case | Gold | Mixture of Agents | Claude-alone |
 | --- | --- | --- | --- |
 | statins-mace-support | SUPPORT | SUPPORT | SUPPORT |
-| sglt2-hf-support | SUPPORT | **CONTRADICT** | SUPPORT |
-| pcsk9-mace-support | SUPPORT | **CONTRADICT** | SUPPORT |
+| sglt2-hf-support | SUPPORT | SUPPORT | SUPPORT |
+| pcsk9-mace-support | SUPPORT | SUPPORT | SUPPORT |
 | niacin-cv-refuted | CONTRADICT | CONTRADICT | CONTRADICT |
 | intensive-bp-diabetes-refuted | CONTRADICT | CONTRADICT | CONTRADICT |
 | hrt-chd-refuted | CONTRADICT | CONTRADICT | CONTRADICT |
@@ -31,19 +31,19 @@ _Bold = disagreed with gold._
 
 | Label | Precision | Recall | F1 | Support |
 | --- | ---: | ---: | ---: | ---: |
-| SUPPORT | 100.0 | 33.3 | 50.0 | 3 |
-| CONTRADICT | 71.4 | 100.0 | 83.3 | 5 |
+| SUPPORT | 100.0 | 100.0 | 100.0 | 3 |
+| CONTRADICT | 100.0 | 100.0 | 100.0 | 5 |
 | NEI | 0.0 | 0.0 | 0.0 | 0 |
-| **macro** | | | 44.4 | 8 |
-| **micro** | | | 75.0 | 8 |
+| **macro** | | | 66.7 | 8 |
+| **micro** | | | 100.0 | 8 |
 
 | gold ↓ / pred → | SUPPORT | CONTRADICT | NEI |
 | --- | ---: | ---: | ---: |
-| SUPPORT | 1 | 2 | 0 |
+| SUPPORT | 3 | 0 | 0 |
 | CONTRADICT | 0 | 5 | 0 |
 | NEI | 0 | 0 | 0 |
 
-**Accuracy:** 75.0%  ·  **Macro-F1:** 44.4%  ·  **Micro-F1:** 75.0%  ·  **N:** 8
+**Accuracy:** 100.0%  ·  **Macro-F1:** 66.7%  ·  **Micro-F1:** 100.0%  ·  **N:** 8
 
 ### Claude-alone
 

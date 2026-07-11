@@ -7,6 +7,7 @@
 // match — nothing is hidden behind an "eligible" badge.
 
 import { useState } from "react";
+import { summariseRank } from "@/lib/trialMatcher/rankSummary";
 import type { CriterionAssessment } from "./types";
 
 // A trial match as rendered here — accepts either the fresh POST shape (nctId/overallStatus)
@@ -91,9 +92,18 @@ function TrialCard({ match }: { match: MatchView }) {
   const scorePct =
     match.eligibilityScore !== null ? Math.round(match.eligibilityScore * 100) : null;
 
+  // Deterministic "why this rank" one-liner, computed purely from the same per-criterion
+  // assessments shown in the breakdown below. Scannable at a glance, above the detail.
+  const rank = summariseRank(match.criteria);
+  const hasCriteria = match.criteria.length > 0;
+  // A triggered exclusion is the disqualifying case — colour the summary red so the reason a
+  // trial ranks low reads at a glance; otherwise keep it in the muted meta tone.
+  const rankCls =
+    rank.exclusionsTriggered > 0 ? "text-red-700" : "text-ink/60";
+
   // Surface the limit of the assessment: how many criteria the notes could not resolve. On a
   // "possibly_eligible" verdict this is the coordinator's cue to verify manually before acting.
-  const unknownCount = match.criteria.filter((c) => c.assessment === "unknown").length;
+  const unknownCount = rank.unknown;
   const showVerifyNote = match.verdict === "possibly_eligible" && unknownCount > 0;
 
   return (
@@ -130,6 +140,12 @@ function TrialCard({ match }: { match: MatchView }) {
         </div>
       </div>
 
+      {hasCriteria ? (
+        <p className={`mt-2 text-xs font-medium ${rankCls}`} title="Why this rank">
+          {rank.text}
+        </p>
+      ) : null}
+
       {showVerifyNote ? (
         <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800">
           {unknownCount} criteri{unknownCount === 1 ? "on was" : "a were"} unclear from the notes —
@@ -140,7 +156,6 @@ function TrialCard({ match }: { match: MatchView }) {
       <div className="mt-3 flex items-center justify-between">
         <span className="text-xs text-ink/40">
           {match.criteria.length} criteri{match.criteria.length === 1 ? "on" : "a"} assessed
-          {unknownCount > 0 ? ` · ${unknownCount} unclear` : ""}
         </span>
         {match.criteria.length > 0 ? (
           <button

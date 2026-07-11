@@ -15,6 +15,13 @@ export type {
   LabExperimentListItem,
 } from "@/lib/labNotebook/schemas";
 
+// Deterministic reproducibility-check shapes (lib/labNotebook/reproducibility.ts) —
+// re-exported here so the components import all their types from one place.
+export type {
+  ReproducibilityHint,
+  ReproducibilityReport,
+} from "@/lib/labNotebook/reproducibility";
+
 // Response of POST /api/lab-notebook/structure — a structured record not yet saved.
 export interface StructureResponse {
   structured: import("@/lib/labNotebook/schemas").StructuredExperiment;

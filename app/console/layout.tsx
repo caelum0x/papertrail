@@ -23,6 +23,7 @@ const NAV_SECTIONS: { title: string; links: { href: string; label: string }[] }[
     title: "Home",
     links: [
       { href: "/console", label: "Overview" },
+      { href: "/console/demo", label: "Reviewer Walkthrough" },
       { href: "/console/projects", label: "Projects" },
       { href: "/console/search", label: "Search" },
     ],

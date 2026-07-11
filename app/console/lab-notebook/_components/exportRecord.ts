@@ -4,6 +4,7 @@
 // the exported artifact carries the same provenance the UI shows.
 
 import type { LabExperimentRecord, StructuredExperiment } from "./types";
+import { checkReproducibility } from "@/lib/labNotebook/reproducibility";
 
 /** Stable, pretty-printed JSON of the full saved record (metadata + grounded structure). */
 export function recordToJson(record: LabExperimentRecord): string {
@@ -100,6 +101,24 @@ export function recordToMarkdown(record: LabExperimentRecord): string {
   if (s.entities.length > 0) {
     lines.push("## Entities _(auto-inferred)_");
     for (const e of s.entities) lines.push(`- ${e.type}: ${e.name}`);
+    lines.push("");
+  }
+
+  // Reproducibility check — a deterministic pass over the structured fields (no LLM, no
+  // invented data). Carried into the exported artifact so the same "add for
+  // reproducibility" hints the UI shows travel with the record into an ELN.
+  const reproducibility = checkReproducibility(s);
+  if (reproducibility.clean) {
+    lines.push("## Reproducibility check _(deterministic)_");
+    lines.push(
+      "No reproducibility gaps found — reagent sources, controls and sample size are recorded."
+    );
+    lines.push("");
+  } else {
+    lines.push("## Reproducibility check — add for reproducibility _(deterministic)_");
+    for (const hint of reproducibility.hints) {
+      lines.push(`- **${hint.message}** ${hint.detail}`);
+    }
     lines.push("");
   }
 

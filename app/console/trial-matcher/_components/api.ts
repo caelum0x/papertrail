@@ -16,21 +16,31 @@ function orgHeaders(): Record<string, string> {
   return orgId ? { "x-org-id": orgId } : {};
 }
 
+// `status` carries the HTTP status of the response so callers can distinguish a temporary,
+// degraded state (e.g. 503 Service Unavailable / a usage-cap surfaced as a 429) from a hard
+// 500 server error, and honour Retry-After style backoff without re-parsing the body. It is 0
+// when no response was received at all (a network error before any HTTP status existed).
 export interface FetchResult<T> {
   data: T | null;
   error: string | null;
   total: number;
+  status: number;
 }
 
 async function readEnvelope<T>(res: Response, fallback: string): Promise<FetchResult<T>> {
   const body = (await res.json().catch(() => null)) as ApiResponse<T> | null;
   if (!body) {
-    return { data: null, error: fallback, total: 0 };
+    return { data: null, error: fallback, total: 0, status: res.status };
   }
   if (!res.ok || !body.success) {
-    return { data: null, error: body.error ?? fallback, total: 0 };
+    return { data: null, error: body.error ?? fallback, total: 0, status: res.status };
   }
-  return { data: body.data ?? null, error: null, total: body.meta?.total ?? 0 };
+  return {
+    data: body.data ?? null,
+    error: null,
+    total: body.meta?.total ?? 0,
+    status: res.status,
+  };
 }
 
 function qs(params: Record<string, string | undefined>): string {
@@ -52,7 +62,7 @@ export async function runMatch(notes: string): Promise<FetchResult<RunResponse>>
     });
     return await readEnvelope<RunResponse>(res, "Failed to match trials.");
   } catch {
-    return { data: null, error: "Network error while matching trials.", total: 0 };
+    return { data: null, error: "Network error while matching trials.", total: 0, status: 0 };
   }
 }
 
@@ -68,7 +78,7 @@ export async function fetchRuns(
     );
     return await readEnvelope<TrialMatchRunRow[]>(res, "Failed to load run history.");
   } catch {
-    return { data: null, error: "Network error loading run history.", total: 0 };
+    return { data: null, error: "Network error loading run history.", total: 0, status: 0 };
   }
 }
 
@@ -81,6 +91,6 @@ export async function fetchRun(id: string): Promise<FetchResult<RunDetailRespons
     });
     return await readEnvelope<RunDetailResponse>(res, "Failed to load run.");
   } catch {
-    return { data: null, error: "Network error loading run.", total: 0 };
+    return { data: null, error: "Network error loading run.", total: 0, status: 0 };
   }
 }

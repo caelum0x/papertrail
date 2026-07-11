@@ -16,6 +16,8 @@ import {
 import type { ExtractedFinding } from "@/lib/schemas";
 import type { GroundedSpan } from "@/lib/grounding";
 import type { Reconciliation } from "@/lib/effectSize";
+import { buildCitation, buildSummary, type ProvenanceInput } from "./_components/provenance";
+import { MixturePanel } from "./_components/MixturePanel";
 
 // Claim-verification console — PaperTrail's core. Paste an efficacy/safety claim and
 // its primary source; the engine extracts the source finding, audits the claim against
@@ -223,6 +225,7 @@ function ResultView({ result }: { result: VerifyResult }) {
         effectCheck={effect_size_check}
         source={source}
         claim={claim}
+        finding={finding}
       />
       <FindingCard finding={finding} />
       {verification.flagged_spans.length > 0 ? (
@@ -244,6 +247,7 @@ function ResultView({ result }: { result: VerifyResult }) {
           ) : null}
         </div>
       )}
+      <MixturePanel claim={claim} />
     </div>
   );
 }
@@ -253,11 +257,13 @@ function VerdictCard({
   effectCheck,
   source,
   claim,
+  finding,
 }: {
   verification: VerifyVerification;
   effectCheck: Reconciliation;
   source: VerifySource;
   claim: string;
+  finding: ExtractedFinding;
 }) {
   const style = VERDICT_STYLES[verification.discrepancy_type];
   const reconcileStyle = RECONCILE_STYLES[effectCheck.verdict];
@@ -306,12 +312,9 @@ function VerdictCard({
         <p className="mt-1.5 text-xs text-ink/70">{effectCheck.rationale}</p>
       </div>
 
-      <CopyCitation
-        claim={claim}
-        verdictLabel={style.label}
-        trustScore={verification.trust_score}
-        source={source}
-        spans={verification.flagged_spans}
+      <ProvenanceBlock
+        input={{ claim, verification, finding, source }}
+        spanCount={verification.flagged_spans.length}
       />
     </div>
   );
@@ -404,52 +407,77 @@ function FlaggedSpanRow({ span, rawText }: { span: GroundedSpan; rawText: string
   );
 }
 
-function CopyCitation({
-  claim,
-  verdictLabel,
-  trustScore,
-  source,
-  spans,
-}: {
-  claim: string;
-  verdictLabel: string;
-  trustScore: number;
-  source: VerifySource;
-  spans: readonly GroundedSpan[];
-}) {
-  const [copied, setCopied] = useState(false);
+type CopyKind = "citation" | "summary";
 
-  const citation = useMemo(() => {
-    const grounded =
-      spans.length > 0 ? spans[0].source_span : source.raw_text.slice(0, 160).trim();
-    const sourceLabel = source.title || "Pasted source";
-    return [
-      `"${claim}"`,
-      `Verdict: ${verdictLabel} (PaperTrail trust score ${trustScore}/100).`,
-      `Source: ${sourceLabel} (${source.source_type}).`,
-      `Grounded on: "${grounded}"`,
-    ].join("\n");
-  }, [claim, verdictLabel, trustScore, source, spans]);
+// Copyable, citation-style provenance a reviewer can paste straight into a memo. Two forms:
+// a one-line footnote citation and a full audit memo (finding + every flagged claim-vs-source
+// quote pair). Both are built by pure functions in ./_components/provenance so the grounded
+// source quotes stay verbatim. A preview panel shows exactly what will be copied — the
+// reviewer sees the provenance before pasting it.
+function ProvenanceBlock({ input, spanCount }: { input: ProvenanceInput; spanCount: number }) {
+  const [copied, setCopied] = useState<CopyKind | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
 
-  const onCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(citation);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setCopied(false);
-    }
-  }, [citation]);
+  const citation = useMemo(() => buildCitation(input), [input]);
+  const summary = useMemo(() => buildSummary(input), [input]);
+
+  const copy = useCallback(
+    async (kind: CopyKind) => {
+      const text = kind === "citation" ? citation : summary;
+      try {
+        await navigator.clipboard.writeText(text);
+        setCopied(kind);
+        window.setTimeout(() => setCopied(null), 2000);
+      } catch {
+        // Clipboard blocked (e.g. insecure context): fall back to the preview so the
+        // reviewer can still select-and-copy the provenance manually.
+        setCopied(null);
+        setShowPreview(true);
+      }
+    },
+    [citation, summary]
+  );
 
   return (
-    <div className="mt-3 flex items-center justify-end">
-      <button
-        type="button"
-        onClick={() => void onCopy()}
-        className="rounded-md border border-ink/15 bg-white px-3 py-1.5 text-xs font-medium text-ink/70 hover:text-ink"
-      >
-        {copied ? "Citation copied ✓" : "Copy citation"}
-      </button>
+    <div className="mt-3 border-t border-ink/10 pt-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-ink/45">
+          Provenance for your memo — grounded quotes copied verbatim
+          {spanCount > 0
+            ? `, including all ${spanCount} flagged span${spanCount === 1 ? "" : "s"}`
+            : ""}
+          .
+        </p>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowPreview((v) => !v)}
+            className="rounded-md border border-ink/15 bg-white px-3 py-1.5 text-xs font-medium text-ink/60 hover:text-ink"
+            aria-expanded={showPreview}
+          >
+            {showPreview ? "Hide preview" : "Preview"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void copy("citation")}
+            className="rounded-md border border-ink/15 bg-white px-3 py-1.5 text-xs font-medium text-ink/70 hover:text-ink"
+          >
+            {copied === "citation" ? "Citation copied ✓" : "Copy citation"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void copy("summary")}
+            className="rounded-md border border-accent/30 bg-accent/5 px-3 py-1.5 text-xs font-medium text-accent hover:bg-accent/10"
+          >
+            {copied === "summary" ? "Summary copied ✓" : "Copy summary"}
+          </button>
+        </div>
+      </div>
+      {showPreview ? (
+        <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap rounded-md border border-ink/10 bg-paper/40 p-3 text-[11px] leading-relaxed text-ink/70">
+          {summary}
+        </pre>
+      ) : null}
     </div>
   );
 }
