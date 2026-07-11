@@ -3,6 +3,7 @@
 
 import type {
   CriterionAssessment,
+  DegradedReason,
   PatientProfile,
   TrialMatch,
   TrialMatchRow,
@@ -11,6 +12,7 @@ import type {
 
 export type {
   CriterionAssessment,
+  DegradedReason,
   PatientProfile,
   TrialMatch,
   TrialMatchRow,
@@ -19,10 +21,16 @@ export type {
 
 // POST /api/trial-matcher response: the persisted run header + the fresh ranked matches
 // (with full criteria) + how many ungroundable profile spans were dropped.
+//
+// DEGRADED runs: when Claude is usage-capped, `run` may be null (profile extraction never
+// completed) and `degraded`/`degradedMessage` explain why. The client renders an honest
+// banner and still lets the coordinator reload prior runs from history.
 export interface RunResponse {
-  run: TrialMatchRunRow;
+  run: TrialMatchRunRow | null;
   matches: TrialMatch[];
   droppedUngrounded: number;
+  degraded: DegradedReason | null;
+  degradedMessage: string | null;
 }
 
 // GET /api/trial-matcher/[id] response: a run header + its persisted matches.

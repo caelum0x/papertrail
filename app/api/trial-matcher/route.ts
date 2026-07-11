@@ -4,6 +4,7 @@ import { withOrg, type Ctx, parsePagination } from "@/lib/api/handler";
 import { ok, created, fail } from "@/lib/api/response";
 import { requireRole } from "@/lib/authz/rbac";
 import { getPool } from "@/lib/db";
+import { classifyError, degradedMessage } from "@/lib/trialMatcher/errors";
 import { runTrialMatch } from "@/lib/trialMatcher/match";
 import { createRun, listRuns } from "@/lib/trialMatcher/repository";
 import type { PatientProfile } from "@/lib/trialMatcher/schemas";
@@ -87,16 +88,39 @@ export const POST = withOrg(async (req: NextRequest, ctx: Ctx) => {
       noteCharCount: notes.length,
       matches: result.matches.length,
       droppedUngrounded: result.droppedUngrounded,
+      degraded: result.degraded,
       verdicts: result.matches.map((m) => m.verdict),
     });
 
+    // Degraded but usable: profile extracted, reasoning partial/unavailable. Persist what we
+    // have (a real run the coordinator can reload) and tell the client WHY so it can show an
+    // honest banner instead of a silent gap. Still a 201 — a run WAS created.
     return created({
       run,
       matches: result.matches,
       droppedUngrounded: result.droppedUngrounded,
+      degraded: result.degraded,
+      degradedMessage: result.degraded ? degradedMessage(result.degraded) : null,
     });
   } catch (err) {
-    console.error("[/api/trial-matcher POST] failed:", err);
+    // Profile extraction itself failed — there is nothing to persist. Distinguish an Anthropic
+    // usage cap / rate limit (temporary, explainable) from a genuine error so the UI can render
+    // an honest degraded banner and steer the user to the history panel, never a white screen.
+    const reason = classifyError(err);
+    console.error("[/api/trial-matcher POST] failed:", { reason });
+
+    if (reason === "quota") {
+      // 200 with an explicit degraded payload (no run): the tool stays usable — the client
+      // renders the banner and the coordinator can reload prior runs from history.
+      return ok({
+        run: null,
+        matches: [],
+        droppedUngrounded: 0,
+        degraded: "quota" as const,
+        degradedMessage: degradedMessage("quota"),
+      });
+    }
+
     return fail(
       "Something went wrong while matching this patient to trials. This has been logged — please try again.",
       500

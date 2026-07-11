@@ -1,12 +1,16 @@
 "use client";
 
-// The notes textarea + Match button, with a prominent de-identification reminder.
-// Presentational: the parent owns the notes state and the submit handler.
+// The notes textarea + Match button, with a prominent de-identification reminder and a
+// one-click "Try an example" affordance that loads a realistic de-identified vignette.
+// Presentational: the parent owns the notes state, the submit handler, and the example loader.
+
+import { EXAMPLE_PATIENT_LABEL } from "./example";
 
 interface PatientInputProps {
   notes: string;
   onChange: (value: string) => void;
   onMatch: () => void;
+  onTryExample: () => void;
   loading: boolean;
   error: string | null;
 }
@@ -14,7 +18,14 @@ interface PatientInputProps {
 const MIN_CHARS = 10;
 const MAX_CHARS = 20000;
 
-export function PatientInput({ notes, onChange, onMatch, loading, error }: PatientInputProps) {
+export function PatientInput({
+  notes,
+  onChange,
+  onMatch,
+  onTryExample,
+  loading,
+  error,
+}: PatientInputProps) {
   const tooShort = notes.trim().length < MIN_CHARS;
   const tooLong = notes.length > MAX_CHARS;
 
@@ -27,9 +38,24 @@ export function PatientInput({ notes, onChange, onMatch, loading, error }: Patie
         notes.
       </div>
 
-      <label className="block text-sm font-medium text-ink/70" htmlFor="notes">
-        De-identified patient notes
-      </label>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <label className="block text-sm font-medium text-ink/70" htmlFor="notes">
+          De-identified patient notes
+        </label>
+        <button
+          type="button"
+          onClick={onTryExample}
+          disabled={loading}
+          className="rounded-md border border-accent/40 px-2.5 py-1 text-xs font-medium text-accent hover:bg-accent/5 disabled:opacity-50"
+          title={`Loads: ${EXAMPLE_PATIENT_LABEL}`}
+        >
+          Try an example
+        </button>
+      </div>
+      <p className="mb-1 text-xs text-ink/40">
+        First time here? Click <span className="font-medium text-accent">Try an example</span> to
+        load {EXAMPLE_PATIENT_LABEL} and run a match instantly.
+      </p>
       <textarea
         id="notes"
         rows={8}

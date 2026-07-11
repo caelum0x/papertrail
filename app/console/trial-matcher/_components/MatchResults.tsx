@@ -49,17 +49,29 @@ function verdictBadge(verdict: string | null) {
 
 function CriterionRow({ criterion }: { criterion: CriterionAssessment }) {
   const style = ASSESSMENT_STYLE[criterion.assessment] ?? ASSESSMENT_STYLE.unknown;
+  const isUnknown = criterion.assessment === "unknown";
   return (
     <li className="border-b border-ink/10 py-2 last:border-b-0">
       <div className="flex items-start gap-2">
         <span
           className={`mt-0.5 shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium ${style.cls}`}
+          title={
+            isUnknown
+              ? "Could not determine from the notes. Add the relevant fact (e.g. the missing lab or history) to the notes and re-run if you have it."
+              : undefined
+          }
         >
           {style.label}
         </span>
         <div className="min-w-0">
           <p className="text-sm text-ink/80">{criterion.text}</p>
           <p className="mt-0.5 text-xs text-ink/50">{criterion.reasoning}</p>
+          {isUnknown ? (
+            <p className="mt-0.5 text-xs text-ink/40">
+              Could not determine from the notes — add the relevant fact and re-run to resolve
+              this.
+            </p>
+          ) : null}
           {criterion.source_span ? (
             <p className="mt-1 border-l-2 border-ink/15 pl-2 text-xs italic text-ink/40">
               “{criterion.source_span}”
@@ -78,6 +90,11 @@ function TrialCard({ match }: { match: MatchView }) {
   const exclusion = match.criteria.filter((c) => c.type === "exclusion");
   const scorePct =
     match.eligibilityScore !== null ? Math.round(match.eligibilityScore * 100) : null;
+
+  // Surface the limit of the assessment: how many criteria the notes could not resolve. On a
+  // "possibly_eligible" verdict this is the coordinator's cue to verify manually before acting.
+  const unknownCount = match.criteria.filter((c) => c.assessment === "unknown").length;
+  const showVerifyNote = match.verdict === "possibly_eligible" && unknownCount > 0;
 
   return (
     <div className="rounded-lg border border-ink/15 bg-white p-4">
@@ -113,9 +130,17 @@ function TrialCard({ match }: { match: MatchView }) {
         </div>
       </div>
 
+      {showVerifyNote ? (
+        <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800">
+          {unknownCount} criteri{unknownCount === 1 ? "on was" : "a were"} unclear from the notes —
+          verify manually before acting. Add the missing facts and re-run to resolve them.
+        </p>
+      ) : null}
+
       <div className="mt-3 flex items-center justify-between">
         <span className="text-xs text-ink/40">
           {match.criteria.length} criteri{match.criteria.length === 1 ? "on" : "a"} assessed
+          {unknownCount > 0 ? ` · ${unknownCount} unclear` : ""}
         </span>
         {match.criteria.length > 0 ? (
           <button
@@ -168,8 +193,31 @@ function TrialCard({ match }: { match: MatchView }) {
 export function MatchResults({ matches }: MatchResultsProps) {
   if (matches.length === 0) {
     return (
-      <div className="rounded-lg border border-ink/15 bg-white p-6 text-center text-sm text-ink/40">
-        No candidate trials were found for this profile.
+      <div className="rounded-lg border border-ink/15 bg-white p-6 text-sm text-ink/50">
+        <p className="font-medium text-ink/70">
+          No trials matched this profile on ClinicalTrials.gov.
+        </p>
+        <p className="mt-2 text-ink/50">The search terms may be too specific. Try:</p>
+        <ul className="mt-1.5 list-disc space-y-1 pl-5 text-ink/50">
+          <li>Broadening the diagnosis keyword (e.g. “breast cancer” rather than a rare subtype).</li>
+          <li>
+            Removing very specific biomarkers or using an alternative phrasing (e.g.
+            “hormone-receptor negative” vs. “triple-negative”).
+          </li>
+          <li>Re-running after editing the notes above — each run searches fresh.</li>
+        </ul>
+        <p className="mt-3 text-ink/50">
+          You can also{" "}
+          <a
+            href="https://clinicaltrials.gov/search"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-accent hover:underline"
+          >
+            check ClinicalTrials.gov directly
+          </a>
+          .
+        </p>
       </div>
     );
   }

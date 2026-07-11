@@ -1,10 +1,13 @@
 "use client";
 
+import { useCallback, useEffect, useState } from "react";
 import { StructuredRecord } from "./StructuredRecord";
+import { recordToJson, recordToMarkdown, slugForFilename } from "./exportRecord";
 import type { LabExperimentRecord } from "./types";
 
 // Detail view of a saved experiment: the full grounded structured record plus the
-// original raw notes it was derived from (collapsed by default), and a delete action.
+// original raw notes it was derived from (collapsed by default), export/copy actions
+// (make the record artifact-worthy for a real lab notebook / ELN), and a delete action.
 
 interface ExperimentDetailProps {
   record: LabExperimentRecord | null;
@@ -17,6 +20,82 @@ interface ExperimentDetailProps {
 function formatDate(iso: string): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString();
+}
+
+// Trigger a client-side file download of `content` with the given filename + MIME type.
+// Object URL is revoked after the click so we don't leak blob URLs.
+function downloadFile(filename: string, content: string, mime: string): void {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// Export/copy actions for a saved record. "Copy as JSON" writes the full record to the
+// clipboard (with a graceful fallback if the Clipboard API is unavailable); "Export .md"
+// downloads a Markdown document a scientist can paste into a lab notebook.
+function ExportActions({ record }: { record: LabExperimentRecord }) {
+  const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState(false);
+
+  // Clear the "Copied" flash after a moment.
+  useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(false), 1800);
+    return () => clearTimeout(t);
+  }, [copied]);
+
+  const onCopyJson = useCallback(async () => {
+    setCopyError(false);
+    const json = recordToJson(record);
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(json);
+        setCopied(true);
+        return;
+      }
+      throw new Error("clipboard unavailable");
+    } catch {
+      // Fallback: hand the scientist the artifact as a download so the action never
+      // dead-ends, even where the Clipboard API is blocked (insecure origin / permissions).
+      downloadFile(`${slugForFilename(record.title)}.json`, json, "application/json");
+      setCopyError(true);
+    }
+  }, [record]);
+
+  const onExportMd = useCallback(() => {
+    downloadFile(
+      `${slugForFilename(record.title)}.md`,
+      recordToMarkdown(record),
+      "text/markdown"
+    );
+  }, [record]);
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        onClick={() => void onCopyJson()}
+        className="rounded-md border border-ink/15 px-3 py-1.5 text-xs font-medium text-ink/70 hover:bg-ink/[0.03]"
+        title="Copy the full structured record (with grounded quotes) to your clipboard"
+      >
+        {copied ? "Copied" : copyError ? "Downloaded JSON" : "Copy as JSON"}
+      </button>
+      <button
+        type="button"
+        onClick={onExportMd}
+        className="rounded-md border border-ink/15 px-3 py-1.5 text-xs font-medium text-ink/70 hover:bg-ink/[0.03]"
+        title="Download a Markdown document to paste into your lab notebook"
+      >
+        Export .md
+      </button>
+    </div>
+  );
 }
 
 export function ExperimentDetail({
@@ -60,14 +139,17 @@ export function ExperimentDetail({
             saved {formatDate(record.createdAt)}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => onDelete(record.id)}
-          disabled={deleting}
-          className="shrink-0 rounded-md border border-ink/15 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
-        >
-          {deleting ? "Deleting…" : "Delete"}
-        </button>
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          <ExportActions record={record} />
+          <button
+            type="button"
+            onClick={() => onDelete(record.id)}
+            disabled={deleting}
+            className="rounded-md border border-ink/15 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+          >
+            {deleting ? "Deleting…" : "Delete"}
+          </button>
+        </div>
       </div>
 
       {record.tags.length > 0 ? (

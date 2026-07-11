@@ -27,6 +27,10 @@ export interface FetchResult<T> {
   data: T | null;
   error: string | null;
   total: number;
+  // HTTP status of the failed response (0 on a network error / no response). Lets callers
+  // distinguish an honest "upstream unavailable" (503) from a hard failure so the UI can
+  // render a degraded state rather than a red error. Undefined on success.
+  status?: number;
 }
 
 async function readEnvelope<T>(
@@ -35,10 +39,10 @@ async function readEnvelope<T>(
 ): Promise<FetchResult<T>> {
   const body = (await res.json().catch(() => null)) as ApiResponse<T> | null;
   if (!body) {
-    return { data: null, error: fallback, total: 0 };
+    return { data: null, error: fallback, total: 0, status: res.status };
   }
   if (!res.ok || !body.success) {
-    return { data: null, error: body.error ?? fallback, total: 0 };
+    return { data: null, error: body.error ?? fallback, total: 0, status: res.status };
   }
   return { data: body.data ?? null, error: null, total: body.meta?.total ?? 0 };
 }
@@ -65,7 +69,13 @@ export async function structureNotes(
     });
     return await readEnvelope<StructureResponse>(res, "Failed to structure notes.");
   } catch {
-    return { data: null, error: "Network error structuring notes.", total: 0 };
+    return {
+      data: null,
+      error:
+        "Couldn't reach the structuring service — check your connection and try again.",
+      total: 0,
+      status: 0,
+    };
   }
 }
 

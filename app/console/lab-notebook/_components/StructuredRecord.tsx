@@ -32,21 +32,54 @@ function GroundedQuote({ span }: { span: string }) {
   );
 }
 
+// A small badge distinguishing sections that carry verbatim grounded quotes from those
+// that are model-normalized summaries (no per-item source_span). Keeps the trust story
+// legible: a scientist knows at a glance which fields are extracted-and-grounded vs
+// inferred, so they don't wonder why an inferred list isn't quoting the notes.
+function InferredBadge() {
+  return (
+    <span
+      className="rounded-full bg-ink/[0.05] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-ink/40"
+      title="Model-normalized summary — faithful to the notes but not a verbatim quote (no source_span)."
+    >
+      Auto-inferred
+    </span>
+  );
+}
+
+function GroundedBadge() {
+  return (
+    <span
+      className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-700"
+      title="Every item carries a verbatim quote from your notes; ungroundable items were dropped."
+    >
+      Grounded
+    </span>
+  );
+}
+
 function Section({
   title,
   count,
+  inferred = false,
   children,
 }: {
   title: string;
   count: number;
+  // When true this section is a model-normalized summary (no verbatim source_span), so we
+  // label it "Auto-inferred" instead of "Grounded" to keep the trust distinction clear.
+  inferred?: boolean;
   children: React.ReactNode;
 }) {
   if (count === 0) return null;
   return (
     <section>
-      <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink/40">
-        {title} ({count})
-      </h4>
+      <div className="mb-2 flex items-center gap-2">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-ink/40">
+          {title} ({count})
+        </h4>
+        {inferred ? <InferredBadge /> : <GroundedBadge />}
+      </div>
       {children}
     </section>
   );
@@ -125,9 +158,12 @@ export function StructuredRecord({ structured }: StructuredRecordProps) {
     <div className="space-y-5">
       {structured.objective ? (
         <section>
-          <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink/40">
-            Objective
-          </h4>
+          <div className="mb-1 flex items-center gap-2">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-ink/40">
+              Objective
+            </h4>
+            <InferredBadge />
+          </div>
           <p className="text-sm text-ink/80">{structured.objective}</p>
         </section>
       ) : null}
@@ -144,7 +180,7 @@ export function StructuredRecord({ structured }: StructuredRecordProps) {
         <SpannedList items={structured.samples} />
       </Section>
 
-      <Section title="Equipment" count={structured.equipment.length}>
+      <Section title="Equipment" count={structured.equipment.length} inferred>
         <div className="flex flex-wrap gap-2">
           {structured.equipment.map((e, i) => (
             <span
@@ -165,7 +201,7 @@ export function StructuredRecord({ structured }: StructuredRecordProps) {
         <SpannedList items={structured.outcomes} />
       </Section>
 
-      <Section title="Next steps" count={structured.next_steps.length}>
+      <Section title="Next steps" count={structured.next_steps.length} inferred>
         <ul className="list-disc space-y-1 pl-5 text-sm text-ink/70">
           {structured.next_steps.map((s, i) => (
             <li key={i}>{s}</li>
@@ -173,7 +209,7 @@ export function StructuredRecord({ structured }: StructuredRecordProps) {
         </ul>
       </Section>
 
-      <Section title="Entities" count={structured.entities.length}>
+      <Section title="Entities" count={structured.entities.length} inferred>
         <div className="flex flex-wrap gap-2">
           {structured.entities.map((e, i) => (
             <span

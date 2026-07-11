@@ -30,6 +30,9 @@ export default function LabNotebookPage() {
   const [notes, setNotes] = useState("");
   const [structuring, setStructuring] = useState(false);
   const [structureError, setStructureError] = useState<string | null>(null);
+  // True when the failure is an honest upstream/degraded condition (Claude unavailable /
+  // network) rather than a hard error — the UI renders it as a yellow, recoverable notice.
+  const [structureDegraded, setStructureDegraded] = useState(false);
   const [preview, setPreview] = useState<StructureResponse | null>(null);
 
   // --- Save ---
@@ -83,11 +86,15 @@ export default function LabNotebookPage() {
   const onStructure = useCallback(async () => {
     setStructuring(true);
     setStructureError(null);
+    setStructureDegraded(false);
     setPreview(null);
     setSaveError(null);
     const res = await structureNotes(notes.trim());
     if (res.error || !res.data) {
       setStructureError(res.error ?? "Failed to structure notes.");
+      // 503 (Claude usage-capped / overloaded) and 0 (no response reached) are honest,
+      // recoverable degraded states — render them yellow, not as a red hard failure.
+      setStructureDegraded(res.status === 503 || res.status === 0);
     } else {
       setPreview(res.data);
     }
@@ -159,10 +166,15 @@ export default function LabNotebookPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-lg font-semibold text-ink/80">Lab Notebook Companion</h1>
+        <p className="mt-1 text-sm text-ink/60">
+          For bench scientists in translational, disease-focused labs: turn rough,
+          dictated bench notes into a reproducible, searchable experiment record — no
+          transcription labor.
+        </p>
         <p className="mt-1 text-sm text-ink/40">
-          Paste rough bench notes or a voice-memo transcript. Claude turns them into a
-          structured, reproducible, searchable experiment record — every quoted field
-          grounded to your exact words.
+          Every reagent, protocol step, and outcome stays grounded to a verbatim quote
+          from your exact words. Claude never invents a reagent or result you didn&rsquo;t
+          write — anything it can&rsquo;t quote is dropped, not shown.
         </p>
       </div>
 
@@ -175,6 +187,7 @@ export default function LabNotebookPage() {
             onStructure={() => void onStructure()}
             loading={structuring}
             error={structureError}
+            degraded={structureDegraded}
           />
 
           {preview ? (

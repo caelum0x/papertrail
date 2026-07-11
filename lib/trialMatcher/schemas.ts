@@ -132,11 +132,20 @@ export type TrialMatch = z.infer<typeof TrialMatchSchema>;
 // RUN + ROW TYPES — the persisted shapes returned by the repository and routes.
 // ---------------------------------------------------------------------------
 
-// The full result of runTrialMatch, before persistence.
+// Why a run produced fewer results than a healthy run would. `quota` = the Anthropic key is
+// usage-capped / rate-limited (temporary, explainable); `error` = an unexpected failure. When
+// present, the profile was still extracted but per-trial reasoning was skipped or partial —
+// the run degrades honestly rather than fabricating scores. See lib/trialMatcher/errors.ts.
+export type DegradedReason = "quota" | "error";
+
+// The full result of runTrialMatch, before persistence. `degraded` is set only when the run
+// completed in a degraded mode (profile extracted, but eligibility reasoning was unavailable);
+// it is null on a fully healthy run.
 export interface TrialMatchRunResult {
   profile: PatientProfile;
   matches: TrialMatch[];
   droppedUngrounded: number;
+  degraded: DegradedReason | null;
 }
 
 // A persisted run header (trial_match_runs row), profile parsed back out of jsonb.
