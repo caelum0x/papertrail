@@ -1,9 +1,18 @@
 // Loading / error / empty states for the evidence library list.
 
+import { Skeleton } from "@/components/console/ui";
+
+// Skeleton rows that mirror the loaded list layout, so the load reads as "populating"
+// rather than a bare "Loading…" line.
 export function ListLoading() {
   return (
-    <div className="bg-white border border-ink/15 rounded-lg p-8 text-center text-sm text-ink/40">
-      Loading evidence...
+    <div className="divide-y divide-ink/10 rounded-lg border border-ink/15 bg-white">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className="flex items-center gap-3 p-4">
+          <Skeleton className="h-4 flex-1" />
+          <Skeleton className="h-4 w-16" />
+        </div>
+      ))}
     </div>
   );
 }
