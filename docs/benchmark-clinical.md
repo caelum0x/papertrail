@@ -26,7 +26,7 @@ than smoothed over. Every healthy-API run on this 20-case single-source set:
 | --- | ---: | ---: | ---: |
 | Equal-weight mixture (naive) | 80–85% | 90% | 95% |
 | + audit "hardening" (64 fixes) | 80–85% | 90% | 95% |
-| **+ lead-verifier deference** | **95%** | 90% | 95% |
+| **+ lead-verifier deference** | **90–95%** (LLM variance) | 90% | 95% |
 
 **What we learned:** a mixture of *experts* is not a mixture of *equals*. With every agent voting
 equally, the composition **diluted its own best expert** — the `discrepancy` auditor (PaperTrail's
@@ -36,16 +36,19 @@ the authoritative auditor correctly **abstains** on a no-support (NEI) case, the
 decided the verdict wrongly.
 
 The fix is a proper Mixture-of-Experts gate (`lib/moa/aggregate.ts`): **defer to the lead verifier**
-when it ran and there is no genuine cross-source consensus — its verdict IS the verdict (single-
-source claim). Fall back to the full deterministic mix only when real cross-source evidence exists
-(MultiVerS/PyMARE fire on ≥2 sources → multi-source composition) **or** when the LLM-based lead
-could not run at all (the resilience floor). With deference, the MoA hits **95%, matching PaperTrail
-and beating Claude-alone (90%)** — NEI cases now correct 2/2, one shared SUPPORT miss.
+on a SINGLE-source claim — its verdict IS the verdict. Fall back to the full deterministic mix when
+real cross-source evidence exists (≥2 sources → MultiVerS/PyMARE composition) **or** when the LLM-
+based lead could not run (the resilience floor). With deference the MoA now **tracks the PaperTrail
+path (90–95% across runs, LLM variance), fixing the NEI cases (2/2)** — it *inherits* the
+authoritative auditor instead of diluting it.
 
 **Three honest conclusions:**
 
-1. **Accuracy (API healthy): MoA 95% = PaperTrail 95% > Claude-alone 90%.** The win is the
-   deterministic reconcile + grounded audit, surfaced by deferring to it — not the crowd.
+1. **Accuracy (API healthy): the deterministic+audit path ties-to-beats a plain LLM — 90–95% vs
+   90%.** The MoA defers to that path on single-source, so it tracks it (this varies run-to-run with
+   the auditor's LLM step: one run MoA 95%, another 90% = Claude). We do NOT claim the mixture
+   *crushes* Claude on single-source — it matches its best expert, which reliably ties-or-beats a
+   plain LLM. The durable edge is the deterministic reconcile + grounding, not the crowd of agents.
 2. **Resilience (API down): MoA 80–85% > Claude-alone / pure-LLM PaperTrail 10%.** When the app key
    briefly hit its usage cap mid-campaign (a hard 400, every LLM call failing), Claude-alone and the
    pure-LLM path collapsed to 10% (2 NEI by default) while the MoA held 80–85% on its deterministic
@@ -61,7 +64,7 @@ Small curated set (20 cases) — a **directional** result, not a large-N leaderb
 ### Latest run
 
 - Dataset: **Clinical-efficacy claims (committed, PaperTrail's design task)** (20 case(s))
-- Generated: 2026-07-11T15:31:34.435Z
+- Generated: 2026-07-11T16:02:32.362Z
 
 #### Headline comparison
 
@@ -69,7 +72,7 @@ Small curated set (20 cases) — a **directional** result, not a large-N leaderb
 | --- | ---: | ---: | ---: | ---: | ---: |
 | PaperTrail | 95.0% | 96.0% | 95.0% | 0 | 20 |
 | Claude-alone | 90.0% | 91.7% | 90.0% | 0 | 20 |
-| Mixture of Agents | 95.0% | 96.0% | 95.0% | 0 | 20 |
+| Mixture of Agents | 90.0% | 91.7% | 90.0% | 0 | 20 |
 
 #### Per-system breakdown
 
@@ -113,19 +116,19 @@ Small curated set (20 cases) — a **directional** result, not a large-N leaderb
 
 | Label | Precision | Recall | F1 | Support |
 | --- | ---: | ---: | ---: | ---: |
-| SUPPORT | 100.0 | 85.7 | 92.3 | 7 |
-| CONTRADICT | 91.7 | 100.0 | 95.7 | 11 |
+| SUPPORT | 100.0 | 71.4 | 83.3 | 7 |
+| CONTRADICT | 84.6 | 100.0 | 91.7 | 11 |
 | NEI | 100.0 | 100.0 | 100.0 | 2 |
-| **macro** | | | 96.0 | 20 |
-| **micro** | | | 95.0 | 20 |
+| **macro** | | | 91.7 | 20 |
+| **micro** | | | 90.0 | 20 |
 
 | gold ↓ / pred → | SUPPORT | CONTRADICT | NEI |
 | --- | ---: | ---: | ---: |
-| SUPPORT | 6 | 1 | 0 |
+| SUPPORT | 5 | 2 | 0 |
 | CONTRADICT | 0 | 11 | 0 |
 | NEI | 0 | 0 | 2 |
 
-**Accuracy:** 95.0%  ·  **Macro-F1:** 96.0%  ·  **Micro-F1:** 95.0%  ·  **N:** 20
+**Accuracy:** 90.0%  ·  **Macro-F1:** 91.7%  ·  **Micro-F1:** 90.0%  ·  **N:** 20
 
 
 <!-- BENCH:RESULTS:END -->

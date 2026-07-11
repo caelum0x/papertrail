@@ -158,12 +158,17 @@ function deferToLead(
  * Deterministically mix weighted agent votes into a verdict + trust score. Pure: no I/O,
  * no LLM, inputs never mutated. Honest "insufficient" when nothing voted.
  *
- * Two regimes, both deterministic: (1) when a high-authority verifier ran and there is no genuine
- * cross-source consensus, DEFER to that lead expert's verdict (the mixture inherits the primary
- * auditor's single-source accuracy instead of diluting it); (2) otherwise mix all votes (multi-
- * source composition, or the resilience floor when the LLM-based lead could not run).
+ * Two regimes, both deterministic: (1) on a SINGLE-source claim, when the high-authority verifier
+ * ran, DEFER to that lead expert's verdict (the mixture inherits the primary-source auditor's
+ * accuracy instead of diluting it); (2) otherwise mix all votes — the multi-source composition
+ * (where cross-source agents outweigh a single-source audit) or the resilience floor when the
+ * LLM-based lead could not run. `sourceCount` gates regime (1): deferring to a one-source audit is
+ * only correct when there IS one source; on multi-source it wrongly overrode cross-source consensus.
  */
-export function aggregate(weighted: readonly WeightedContribution[]): MoaAggregate {
+export function aggregate(
+  weighted: readonly WeightedContribution[],
+  opts: { sourceCount?: number } = {}
+): MoaAggregate {
   const weights: MoaAggregate["weights"] = [];
   let supports = 0;
   let refutes = 0;
@@ -179,8 +184,10 @@ export function aggregate(weighted: readonly WeightedContribution[]): MoaAggrega
     const c = w.contribution;
     if (c.ran) ran += 1;
 
-    const authority = Number.isFinite(w.authority) && w.authority > 0 ? w.authority : 1;
-    const weight = clamp01(w.gate) * clamp01(c.confidence) * categoryWeight(w.category) * authority;
+    // Authority does NOT amplify the mix weight — that let one agent (the primary-source auditor)
+    // dominate MULTI-source claims wrongly, overriding cross-source consensus. Authority is used
+    // ONLY to pick the lead verifier for single-source deference below.
+    const weight = clamp01(w.gate) * clamp01(c.confidence) * categoryWeight(w.category);
 
     if (VOTES.has(c.signal) && c.ran) {
       voted += 1;
@@ -193,10 +200,12 @@ export function aggregate(weighted: readonly WeightedContribution[]): MoaAggrega
 
   const total = weighted.length;
 
-  // Regime 1 — LEAD-VERIFIER DEFERENCE. When the authoritative auditor ran and no genuine
-  // cross-source consensus exists (single-source claim), its verdict IS the verdict.
+  // Regime 1 — LEAD-VERIFIER DEFERENCE. Only on a SINGLE-source claim (a one-source primary audit
+  // must not override cross-source consensus on multi-source claims), and only when no cross-source
+  // agent nonetheless voted. When the authoritative auditor ran, its verdict IS the verdict.
+  const singleSource = (opts.sourceCount ?? 1) <= 1;
   const lead = leadVerifier(weighted);
-  if (lead && !crossSourceConsensusPresent(weighted)) {
+  if (singleSource && lead && !crossSourceConsensusPresent(weighted)) {
     return deferToLead(
       lead,
       { supports, refutes, mixed },

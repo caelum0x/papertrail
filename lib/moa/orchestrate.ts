@@ -100,8 +100,9 @@ export async function orchestrate(
     };
   });
 
-  // Layer 4 — deterministic mix.
-  const agg = aggregate(weighted);
+  // Layer 4 — deterministic mix. Pass the source count so lead-verifier deference (a single-source
+  // optimization) never overrides cross-source consensus on multi-source claims.
+  const agg = aggregate(weighted, { sourceCount: input.sources.length });
 
   // Layer 4 — grounded narrative (Claude, explanatory only).
   const synthesis = await synthesize({
