@@ -91,8 +91,13 @@ export async function callClaudeForJson<T>(params: {
   user: string;
   schema: { parse: (v: unknown) => T };
   maxTokens?: number;
+  // Optional per-call model override. Defaults to CLAUDE_MODEL. Lets latency-sensitive,
+  // high-fan-out steps (e.g. per-trial eligibility) opt into a faster model without
+  // changing the global default used by the accuracy-critical verification path.
+  model?: string;
 }): Promise<T> {
   const anthropic = getClaude();
+  const model = params.model ?? CLAUDE_MODEL;
 
   const call = async (system: string, user: string): Promise<unknown | undefined> => {
     // Retry transient Anthropic errors (429 rate_limit, 529 overloaded, 503) with exponential
@@ -103,7 +108,7 @@ export async function callClaudeForJson<T>(params: {
     for (let attempt = 0; ; attempt++) {
       try {
         const response = await anthropic.messages.create({
-          model: CLAUDE_MODEL,
+          model,
           max_tokens: params.maxTokens ?? 1024,
           system,
           messages: [{ role: "user", content: user }],

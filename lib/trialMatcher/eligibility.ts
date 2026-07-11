@@ -94,22 +94,32 @@ export type AssessLlm = (params: {
   user: string;
 }) => Promise<TrialAssessmentLlmOutput>;
 
+// The matcher fans out one eligibility call PER candidate trial (up to MAX_CANDIDATES, in
+// parallel), so this step is latency-bound: on the accuracy-critical default model the fan-out
+// pushed the whole request past the 60s serverless limit (a 504). Per-criterion met/not_met/
+// unknown classification against a supplied profile is well within a fast model's ability, so
+// eligibility runs on Haiku by default — dramatically faster and cheaper — while the primary
+// verify/verification path keeps the default model. Override with TRIAL_MATCHER_MODEL.
+const ELIGIBILITY_MODEL =
+  process.env.TRIAL_MATCHER_MODEL || "claude-haiku-4-5-20251001";
+
 const defaultLlm: AssessLlm = (params) =>
   callClaudeForJson({
     system: params.system,
     user: params.user,
     schema: TrialAssessmentLlmOutputSchema,
-    // Headroom for a per-criterion object each: a trial with many criteria produced a long
-    // JSON array that truncated at the old 3072 budget, so the response failed to parse and
-    // the whole trial degraded. Paired with the MAX_CRITERIA_PER_TYPE cap in assessTrial.
-    maxTokens: 4096,
+    model: ELIGIBILITY_MODEL,
+    // Bounded output: with MAX_CRITERIA_PER_TYPE criteria, the per-criterion JSON array stays
+    // well under this budget (the old 3072 truncated on many-criteria trials). Kept tight so
+    // the parallel per-trial fan-out returns quickly enough to fit the serverless time limit.
+    maxTokens: 2560,
   });
 
 // Trials occasionally list dozens of eligibility criteria; assessing all of them produces a
-// JSON array long enough to overrun the token budget and fail to parse. We assess the leading
-// (most decision-relevant) criteria of each type — enough for a faithful eligibility read on
-// real trials without truncating the model's response.
-const MAX_CRITERIA_PER_TYPE = 15;
+// JSON array long enough to overrun the token budget AND slow the per-trial call past the
+// serverless limit under fan-out. We assess the leading (most decision-relevant) criteria of
+// each type — enough for a faithful eligibility read on real trials, fast and untruncated.
+const MAX_CRITERIA_PER_TYPE = 10;
 
 const SYSTEM_PROMPT = `You are a clinical research coordinator assessing whether a de-identified patient is eligible for a clinical trial. You are given the patient's structured profile and the trial's parsed inclusion and exclusion criteria. For EACH criterion, decide whether it is met, not_met, or unknown for THIS patient.
 
