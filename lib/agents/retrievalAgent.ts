@@ -4,7 +4,23 @@ import { searchPubmed, fetchPubmedRecords } from "../sources/pubmed";
 import { searchTrials, fetchTrialResults } from "../sources/clinicaltrials";
 import { SourceCandidate } from "../schemas";
 
-const SIMILARITY_THRESHOLD = 0.72; // cosine similarity; below this, treat as "no confident match"
+// Cosine-similarity floor below which a cached source is treated as "no confident match".
+// Configurable via RETRIEVAL_SIMILARITY_THRESHOLD so it can be calibrated per embedding
+// model without a code change. Default 0.6: voyage-3 cosine similarity for a claim vs its
+// own primary-source abstract typically lands in the ~0.6-0.72 band, so the previous 0.72
+// floor rejected genuine direct-quote matches (a claim quoting its own trial scored below
+// it). 0.6 admits those true matches while still rejecting off-topic sources, which score
+// materially lower. Clamped to [0,1]; a malformed env value falls back to the default.
+const DEFAULT_SIMILARITY_THRESHOLD = 0.6;
+const SIMILARITY_THRESHOLD = ((): number => {
+  const raw = process.env.RETRIEVAL_SIMILARITY_THRESHOLD;
+  if (raw === undefined) return DEFAULT_SIMILARITY_THRESHOLD;
+  const parsed = Number.parseFloat(raw);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
+    return DEFAULT_SIMILARITY_THRESHOLD;
+  }
+  return parsed;
+})();
 const MAX_SOURCES = 3; // top-N confident matches returned for cross-verification
 
 // When DEMO_MODE is on, retrieval NEVER live-fetches from PubMed/ClinicalTrials.gov —
@@ -92,7 +108,21 @@ async function searchConfidentSources(claimVector: number[]): Promise<SourceCand
      limit $2`,
     [vectorLiteral, MAX_SOURCES]
   );
-  return (rows as SourceCandidate[]).filter((r) => r.similarity >= SIMILARITY_THRESHOLD);
+  const confident = (rows as SourceCandidate[]).filter(
+    (r) => r.similarity >= SIMILARITY_THRESHOLD
+  );
+  // Calibration diagnostic: when the best cached source exists but nothing clears the
+  // threshold, record the top similarity + threshold (no claim text, no source text) so
+  // the floor can be tuned against real data instead of guessed. Ids/scores only.
+  if (confident.length === 0 && rows.length > 0) {
+    const top = rows[0] as SourceCandidate & { similarity: number };
+    console.error(
+      `[retrieval] no confident match: top similarity ${Number(
+        top.similarity
+      ).toFixed(3)} < threshold ${SIMILARITY_THRESHOLD} (source ${top.external_id})`
+    );
+  }
+  return confident;
 }
 
 async function ingestLiveResults(claim: string): Promise<void> {
