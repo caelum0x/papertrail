@@ -15,9 +15,10 @@ import { rankByClaimFrame } from "@/lib/agents/contextualRank";
 // expensive verification runs.
 //
 // MOAT: no LLM decides the numeric rank — deterministic frame-overlap math does.
-// When `llm: true` is set, a single grounded Claude pass may TAG survivors as
-// on-topic (advisory only; every tag must quote a real substring of the source or it
-// is dropped), but the ranking is always the deterministic score.
+// A single grounded Claude pass TAGS survivors as on-topic (advisory only; every tag
+// must quote a real substring of the source or it is dropped), but the ranking is
+// always the deterministic score. The Claude relevance pass runs BY DEFAULT (full
+// capacity); pass `llm: false` to get the pure deterministic ranking with no model call.
 export const runtime = "nodejs";
 
 const RerankRequestSchema = z.object({
@@ -64,7 +65,10 @@ export async function POST(req: NextRequest) {
 
   try {
     const { claim, sources, threshold, llm } = parsed.data;
-    const result = await rankByClaimFrame(claim, sources, { threshold, llm });
+    // Grounded Claude relevance tagging runs by default (full capacity); callers can
+    // opt out with `llm: false` for a pure deterministic ranking.
+    const useLlm = llm ?? true;
+    const result = await rankByClaimFrame(claim, sources, { threshold, llm: useLlm });
 
     logEvent("retrieval.rerank.success", {
       latencyMs: Date.now() - start,
@@ -72,7 +76,7 @@ export async function POST(req: NextRequest) {
       keptCount: result.ranked.length,
       droppedCount: result.droppedIds.length,
       relevanceUngroundedCount: result.relevanceUngroundedCount,
-      llm: llm === true,
+      llm: useLlm,
     });
 
     return ok(result);
