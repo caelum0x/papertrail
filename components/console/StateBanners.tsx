@@ -5,6 +5,8 @@
 // Presentational only — no data flow, no API calls. Pages own their state and
 // simply render these when appropriate.
 
+import { SkeletonText } from "./ui";
+
 // Full-width error banner. Uses the house error color (red-700) and is announced
 // to assistive tech via role="alert".
 export function ErrorBanner({ message }: { message: string }) {
@@ -19,15 +21,18 @@ export function ErrorBanner({ message }: { message: string }) {
 }
 
 // Full-width loading banner shown while a request is in flight. Accepts a short
-// status message describing what the tool is doing.
+// status message describing what the tool is doing. Renders animated skeleton
+// shimmer bars above the message so an in-flight request reads as "working",
+// not "stuck". Signature is unchanged so every existing caller keeps working.
 export function LoadingBanner({ message }: { message: string }) {
   return (
     <div
       role="status"
       aria-live="polite"
-      className="rounded-lg border border-ink/15 bg-white p-6 text-sm text-ink/50"
+      className="rounded-lg border border-ink/15 bg-white p-6"
     >
-      {message}
+      <SkeletonText lines={3} />
+      <p className="mt-4 text-sm text-ink/50">{message}</p>
     </div>
   );
 }

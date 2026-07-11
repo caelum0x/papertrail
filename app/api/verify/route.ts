@@ -15,10 +15,13 @@ import { buildEvidenceCertainty } from "@/lib/verify/evidenceCertainty";
 
 export const runtime = "nodejs";
 
-// Offline demo/dev mode: answer the locked demo claims from hand-verified fixtures
-// (real grounding + effect-size, stubbed network/LLM). Lets the app run and demo with
-// zero secrets and keeps the live demo off the network critical path.
-const MOCK_MODE = process.env.MOCK_MODE === "true";
+// Offline DEV/CI-ONLY fixture mode: answers the locked demo claims from hand-verified
+// fixtures so the test suite and local dev can run with zero secrets and off the network.
+// HARD PRODUCTION GUARD: this path can NEVER activate in a production deployment, even if
+// MOCK_MODE=true is set in the environment by mistake. Production always runs the real
+// retrieve → extract → verify pipeline; there are no canned answers in prod.
+const MOCK_MODE =
+  process.env.MOCK_MODE === "true" && process.env.NODE_ENV !== "production";
 
 export async function POST(req: NextRequest) {
   const start = Date.now();
