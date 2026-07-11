@@ -243,11 +243,12 @@ function classifyFragility(fi: number, smallerArmTotal: number): FragilityVerdic
  * reassignments needed to MAKE it significant (still a fragility measure — how
  * close the null result is to flipping).
  *
- * The search is exhaustive over the arm total (bounded by the arm size), moving
- * one event at a time and re-running the exact test, so the result is the true
- * minimum, not an approximation. Column margins are held fixed for the standard
- * FI (patients are reassigned within an arm: non-event -> event), matching the
- * original Walsh et al. algorithm and the `fragility` R package.
+ * The search tries all four elementary within-arm reassignments (each holds that arm's
+ * ROW/total margin fixed and shifts one patient between event and non-event) and takes the
+ * minimum flip, re-running the exact test at every step — so the result is the true minimum
+ * regardless of which arm carries the higher event rate, matching the `fragility` R package's
+ * behavior rather than the single-direction original Walsh procedure (which mislabels
+ * imbalanced/harmful-arm tables as robust).
  */
 export function fragilityIndex(table: TwoByTwo): FragilityIndexResult {
   const parsed = TwoByTwoSchema.parse(table);
@@ -259,44 +260,48 @@ export function fragilityIndex(table: TwoByTwo): FragilityIndexResult {
 
   const startSignificant = baselineP < SIGNIFICANCE_ALPHA;
 
-  // Choose the arm with fewer events — reassigning there needs the fewest moves,
-  // which is the standard FI convention.
-  const smallerEventArm: 1 | 2 = a <= c ? 1 : 2;
+  // The fragility index is the MINIMUM single-patient outcome reassignments that flip the
+  // significance state. Each elementary move reassigns one patient WITHIN a single arm (that
+  // arm's total — its row margin — is fixed), stepping the table toward the null (for a
+  // significant result) or away from it (for a non-significant one). We search ALL FOUR
+  // elementary directions and take the minimum.
+  //
+  // A prior version only ever added events to the fewer-RAW-event arm. That move increases
+  // significance whenever the fewer-event arm has the HIGHER event rate (a small
+  // imbalanced/harmful-treatment arm), so it could never flip such a table and reported it as
+  // "robust" / FI = null — the exact opposite of the truth for tables whose true FI is small.
+  type Cur = { a: number; b: number; c: number; d: number };
+  const MOVES: ReadonlyArray<{ arm: 1 | 2; step: (t: Cur) => Cur | null }> = [
+    { arm: 1, step: (t) => (t.b > 0 ? { ...t, a: t.a + 1, b: t.b - 1 } : null) }, // arm1: non-event → event
+    { arm: 1, step: (t) => (t.a > 0 ? { ...t, a: t.a - 1, b: t.b + 1 } : null) }, // arm1: event → non-event
+    { arm: 2, step: (t) => (t.d > 0 ? { ...t, c: t.c + 1, d: t.d - 1 } : null) }, // arm2: non-event → event
+    { arm: 2, step: (t) => (t.c > 0 ? { ...t, c: t.c - 1, d: t.d + 1 } : null) }, // arm2: event → non-event
+  ];
+  const totalN = total1 + total2;
 
-  // Walk one event at a time in the chosen arm (non-event -> event), rerunning
-  // Fisher's test after each move, until the significance state flips. The arm
-  // total is fixed (a patient becomes an event; the arm size is unchanged), so
-  // the row margin of that arm is preserved — the classic Walsh procedure.
-  let curA = a;
-  let curB = b;
-  let curC = c;
-  let curD = d;
-  const armTotal = smallerEventArm === 1 ? total1 : total2;
-
-  let steps = 0;
+  let fi: number | null = null;
   let flippedP: number | null = null;
-  for (let i = 0; i < armTotal; i++) {
-    if (smallerEventArm === 1) {
-      if (curB <= 0) break; // no non-events left to convert
-      curA += 1;
-      curB -= 1;
-    } else {
-      if (curD <= 0) break;
-      curC += 1;
-      curD -= 1;
-    }
-    steps += 1;
-    const p = fisherExactTwoSided({ a: curA, b: curB, c: curC, d: curD });
-    const nowSignificant = p < SIGNIFICANCE_ALPHA;
-    if (nowSignificant !== startSignificant) {
-      flippedP = p;
-      break;
+  let flipArm: 1 | 2 | null = null;
+  for (const move of MOVES) {
+    let cur: Cur = { a, b, c, d };
+    for (let i = 1; i <= totalN; i++) {
+      const next = move.step(cur);
+      if (next === null) break; // arm exhausted in this direction
+      cur = next;
+      const p = fisherExactTwoSided(cur);
+      if (p < SIGNIFICANCE_ALPHA !== startSignificant) {
+        if (fi === null || i < fi) {
+          fi = i;
+          flippedP = p;
+          flipArm = move.arm;
+        }
+        break; // this direction is monotone; first flip is its minimum
+      }
     }
   }
 
-  const flipped = flippedP !== null;
-  const fi = flipped ? steps : null;
-  const smallerArmTotal = smallerEventArm === 1 ? total1 : total2;
+  const flipped = fi !== null;
+  const flipArmTotal = flipArm === 1 ? total1 : flipArm === 2 ? total2 : 0;
 
   let verdict: FragilityVerdict;
   let interpretation: string;
@@ -307,25 +312,25 @@ export function fragilityIndex(table: TwoByTwo): FragilityIndexResult {
     direction = flipped ? "toward_significance" : null;
     interpretation = flipped
       ? `The table is NOT significant (Fisher exact p = ${baselineP.toFixed(4)} ≥ 0.05). ` +
-        `Reassigning ${fi} outcome${fi === 1 ? "" : "s"} in arm ${smallerEventArm} would be enough ` +
+        `Reassigning ${fi} outcome${fi === 1 ? "" : "s"} in arm ${flipArm} would be enough ` +
         `to make it significant — a non-significant result this close to the threshold is itself ` +
         `fragile and should not be over-interpreted as evidence of no effect.`
       : `The table is NOT significant (Fisher exact p = ${baselineP.toFixed(4)} ≥ 0.05), and no ` +
-        `reassignment within arm ${smallerEventArm} makes it significant. The result is stably ` +
+        `single-patient reassignment in either arm makes it significant. The result is stably ` +
         `non-significant on these counts.`;
   } else if (!flipped) {
     verdict = "robust";
     direction = null;
     interpretation =
-      `The result is significant (Fisher exact p = ${baselineP.toFixed(4)} < 0.05) and no complete ` +
-      `reassignment of arm ${smallerEventArm} makes it non-significant — the verdict is highly robust.`;
+      `The result is significant (Fisher exact p = ${baselineP.toFixed(4)} < 0.05) and no ` +
+      `reassignment in either arm makes it non-significant — the verdict is highly robust.`;
   } else {
-    verdict = classifyFragility(fi as number, smallerArmTotal);
+    verdict = classifyFragility(fi as number, flipArmTotal);
     direction = "away_from_significance";
-    const relPct = smallerArmTotal > 0 ? (((fi as number) / smallerArmTotal) * 100).toFixed(1) : "n/a";
+    const relPct = flipArmTotal > 0 ? (((fi as number) / flipArmTotal) * 100).toFixed(1) : "n/a";
     interpretation =
-      `Fragility Index = ${fi}: reassigning just ${fi} event${fi === 1 ? "" : "s"} in arm ` +
-      `${smallerEventArm} (${relPct}% of that arm) flips the two-sided Fisher exact p from ` +
+      `Fragility Index = ${fi}: reassigning just ${fi} outcome${fi === 1 ? "" : "s"} in arm ` +
+      `${flipArm} (${relPct}% of that arm) flips the two-sided Fisher exact p from ` +
       `${baselineP.toFixed(4)} to ${(flippedP as number).toFixed(4)} (≥ 0.05). ` +
       (verdict === "fragile"
         ? `This is a FRAGILE result — a handful of outcome changes overturns the verdict, so it should ` +
@@ -342,7 +347,7 @@ export function fragilityIndex(table: TwoByTwo): FragilityIndexResult {
     flippedP,
     direction,
     eventsAltered: fi ?? 0,
-    smallerEventArm: startSignificant || flipped ? smallerEventArm : null,
+    smallerEventArm: flipArm,
     verdict,
     interpretation,
   };

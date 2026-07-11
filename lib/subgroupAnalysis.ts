@@ -82,6 +82,15 @@ function round(n: number, dp = 1): number {
   return Math.round(n * f) / f;
 }
 
+// Round a p-value for display WITHOUT ever collapsing a genuinely positive p to exactly 0 —
+// a scientist never reports "p = 0". Below the 4-dp display resolution we keep two significant
+// figures (e.g. 9.5e-7), so a highly significant interaction reads as small-but-positive.
+function roundP(p: number): number {
+  if (p <= 0) return 0;
+  const r = round(p, 4);
+  return r > 0 ? r : Number(p.toPrecision(2));
+}
+
 // True when two positive magnitudes are within MATCH_FACTOR of each other. For
 // small/near-zero reductions, fall back to an absolute 5-point window (a 2% and a
 // 3% reduction are "close"; a 5% and a 40% are not).
@@ -154,7 +163,7 @@ export function subgroupAnalysis(subgroups: readonly Subgroup[]): SubgroupAnalys
     subgroups: pooledSubgroups,
     qBetween: round(qBetween, 4),
     df,
-    pValue: round(pValue, 4),
+    pValue: roundP(pValue),
     interactionSignificant: pValue < SIGNIFICANCE,
     overall,
   };
