@@ -57,6 +57,8 @@ const NAV_SECTIONS: { title: string; links: { href: string; label: string }[] }[
       { href: "/console/evidence-report", label: "Evidence Report" },
       { href: "/console/synthesis", label: "Meta-analysis" },
       { href: "/console/meta-advanced", label: "Bayesian / Sensitivity" },
+      { href: "/console/fragility", label: "Verdict Fragility" },
+      { href: "/console/living-evidence", label: "Living Evidence" },
       { href: "/console/synthesis-report", label: "Synthesis Report" },
       { href: "/console/extraction", label: "Paper Extraction" },
       { href: "/console/citations", label: "Smart Citations" },
@@ -119,6 +121,8 @@ const NAV_SECTIONS: { title: string; links: { href: string; label: string }[] }[
     links: [
       { href: "/console/compliance", label: "Compliance" },
       { href: "/console/compliance/controls", label: "Controls" },
+      { href: "/console/governance/data", label: "Data Governance" },
+      { href: "/console/enterprise/audit-export", label: "Audit Export" },
       { href: "/console/admin/security", label: "Security (XDR)" },
       { href: "/console/billing/tier", label: "Plan & Tiers" },
       { href: "/console/audit", label: "Audit" },
