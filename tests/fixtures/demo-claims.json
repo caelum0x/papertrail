@@ -19,7 +19,7 @@
   },
   {
     "id": "demo-green-pass-sprint",
-    "claim": "In SPRINT — a trial stopped early at a median 3.26 years of follow-up — intensive systolic blood-pressure control to below 120 mm Hg versus below 140 mm Hg reduced the primary composite cardiovascular outcome in adults at increased cardiovascular risk without diabetes, with a hazard ratio of 0.75, although serious adverse events such as hypotension and acute kidney injury were more frequent with intensive treatment.",
+    "claim": "In SPRINT, intensively lowering systolic blood pressure to below 120 mm Hg in adults at increased cardiovascular risk without diabetes reduced the primary composite cardiovascular outcome, with a hazard ratio of 0.75 versus a target below 140 mm Hg.",
     "source_type": "pubmed",
     "source_external_id": "26551272",
     "source_url": "https://pubmed.ncbi.nlm.nih.gov/26551272/",

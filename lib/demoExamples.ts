@@ -26,9 +26,9 @@ export const DEMO_EXAMPLES: DemoExample[] = [
     id: "demo-green-pass-sprint",
     label: "Confirm an accurate claim",
     claim:
-      "In SPRINT — a trial stopped early at a median 3.26 years of follow-up — intensive systolic blood-pressure control to below 120 mm Hg versus below 140 mm Hg reduced the primary composite cardiovascular outcome in adults at increased cardiovascular risk without diabetes, with a hazard ratio of 0.75, although serious adverse events such as hypotension and acute kidney injury were more frequent with intensive treatment.",
+      "In SPRINT, intensively lowering systolic blood pressure to below 120 mm Hg in adults at increased cardiovascular risk without diabetes reduced the primary composite cardiovascular outcome, with a hazard ratio of 0.75 versus a target below 140 mm Hg.",
     blurb:
-      "A SPRINT blood-pressure claim stated completely — the effect size plus the trial's early-stopping and adverse-event caveats — so PaperTrail confirms it against the source with nothing to flag.",
+      "A SPRINT blood-pressure claim stated precisely enough to match the source's own numbers and pass verification.",
   },
   {
     id: "demo-honest-abstention-sprint-mismatch",
