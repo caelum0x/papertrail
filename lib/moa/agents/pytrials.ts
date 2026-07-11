@@ -5,11 +5,21 @@
 // design fields (randomized / blinding / enrollment / phase) from the source's own text, then
 // hands them to scoreDesignCredibility (lib/sources/trialDesign.ts) which owns all scoring and
 // tiering. It PRODUCES a `design_priors` artifact — a DesignPrior[] of {sourceId, tier,
-// priorWeight} — that downstream verification/aggregation agents CONSUME to weight how much a
+// priorWeight} — published on the blackboard for a downstream consumer to weight how much a
 // trial-shaped source's design strength should count. Because it weights context rather than
 // asserting support/refute, its signal is ALWAYS `neutral`.
 //
 // PRODUCES: ["design_priors"].  CONSUMES: [] — a pure enricher with no upstream dependency.
+//
+// COMPOSITION NOTE (design_priors currently has no wired consumer): the `design_priors` kind is
+// a declared first-class artifact (types.ts ArtifactKind + ArtifactPayloads), but no agent yet
+// declares `consumes: ["design_priors"]`, so the priors reach the blackboard without a reader.
+// Wiring that consumer (e.g. a source-weighting verifier that folds priorWeight into its own
+// per-source confidence, declaring `consumes: ["design_priors"]` so the scheduler orders it
+// after pytrials) lives OUTSIDE this file and is deliberately left for that agent — the artifact
+// is kept produced here so the consumer can be added without re-touching this enricher, rather
+// than dropped (which would delete a documented Layer-1 artifact from the taxonomy). The extra
+// work is bounded and pure; it does not affect the deterministic verdict/trust mix.
 //
 // MOAT: no LLM, no I/O, no DB pool, no network. The parse and the credibility score are pure
 // functions of the source text, so the same input always yields the same priors, tiers, and
@@ -83,7 +93,10 @@ const TRIAL_PROBES: readonly TrialProbe[] = [
   { key: "openLabel", pattern: /\b(?:open[-\s]?label|no\s+masking|unmask)\b/i },
   { key: "placebo", pattern: /\bplacebo\b/i },
   { key: "enrollment", pattern: /\b(?:enroll(?:ed|ment)?|participants?|subjects?|patients?)\b/i },
-  { key: "phase", pattern: /\bphase\s*(?:1|2|3|4|i{1,3}|iv)\b/i },
+  // Trailing `[a-z]?` (not `\b`) so phase modifiers — IIIa/IIIb/IIa/IIb/3a — still count as a
+  // phase mention; `\b` after a roman numeral fails on the trailing letter. `iv` is listed
+  // before `i{1,3}` so ordered alternation matches "IV" whole rather than "I"+consumed "V".
+  { key: "phase", pattern: /\bphase\s*(?:iv|i{1,3}|1|2|3|4)[a-z]?\b/i },
   { key: "eligibility", pattern: /\b(?:eligibility|inclusion\s+criteria|exclusion\s+criteria)\b/i },
 ];
 
@@ -152,7 +165,15 @@ function inferEnrollment(text: string): number | undefined {
 
 // Map an explicit trial phase to the scorer's uppercase PHASEn vocabulary. Takes the highest
 // phase mentioned so combined designs ("Phase 2/3") credit the strongest.
-const PHASE_MENTION = /\bphase\s*(1|2|3|4|i{1,3}|iv)\b/gi;
+//
+// Trailing `[a-z]?` (not `\b`) lets phase modifiers — IIIa/IIIb/IIa/IIb/3a common in trial
+// publications — still match; a plain `\b` after the numeral fails on the trailing letter, so
+// Phase IIIb went entirely undetected before. The optional modifier letter is OUTSIDE the
+// capture group, so the group still yields only the bare "iii"/"iv"/digit that
+// romanOrArabicToNumber understands. `iv` precedes `i{1,3}` in the ordered alternation so "IV"
+// matches whole instead of the alternation taking "I" and `[a-z]?` swallowing the "V"
+// (which would misread a Phase IV trial as Phase 1).
+const PHASE_MENTION = /\bphase\s*(iv|i{1,3}|1|2|3|4)[a-z]?\b/gi;
 
 function romanOrArabicToNumber(token: string): number | undefined {
   switch (token.trim().toLowerCase()) {

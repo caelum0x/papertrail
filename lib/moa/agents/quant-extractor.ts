@@ -11,7 +11,9 @@
 // This is the numeric grounding a generic LLM claim-checker structurally cannot
 // reproduce: real reported effect sizes, each traceable to a verbatim substring located
 // in the source via lib/grounding.locateSpan. Any effect whose `raw` string cannot be
-// located in the source is DROPPED from grounding (never fabricated).
+// located in the source is DROPPED entirely — both from the grounded spans AND from the
+// produced effect_sizes artifact — so no downstream consumer ever pools an ungrounded
+// (potentially fabricated) number. Every element of the produced artifact has a span.
 //
 // Pure and stateless: extraction is regex over cached text, grounding is exact-substring
 // location, so usedClaude is always false and there is no DB pool or network. If no
@@ -113,6 +115,10 @@ function groundEffect(
 ): GroundedSpan | null {
   const source = sources.find((s) => s.id === e.sourceId);
   if (source === undefined) return null;
+  // Defensive: MoaSource.text is a required string in the type, but a runtime caller
+  // could still hand us undefined/null. Skip (never throw) rather than let locateSpan
+  // call indexOf on a non-string.
+  if (!source.text) return null;
   const located = locateSpan(source.text, e.raw);
   if (located === null) return null;
   return {
@@ -150,24 +156,28 @@ const agent: MoaAgent = {
   ): Promise<AgentContribution> {
     void _bb; // Pure producer: reads no upstream artifacts.
     try {
+      // Extract every candidate ratio effect, then keep ONLY the ones whose verbatim
+      // `raw` substring grounds back to an exact offset in the owning source. The kept
+      // effects and their spans are built in a single pass so the produced artifact and
+      // the grounded spans stay perfectly in lockstep: a downstream consumer (PyMARE
+      // pooling, etc.) never receives an ungrounded — potentially fabricated — number.
       const effects: ParsedEffectSize[] = [];
+      const groundedSpans: GroundedSpan[] = [];
       for (const source of ctx.sources) {
-        effects.push(...extractFromSource(source));
+        for (const e of extractFromSource(source)) {
+          const span = groundEffect(e, ctx.sources);
+          if (span === null) continue; // ungroundable -> excluded from the artifact
+          effects.push(e);
+          groundedSpans.push(span);
+        }
       }
 
       const count = effects.length;
       if (count === 0) {
         return skippedContribution(
           AGENT_ID,
-          "No ratio effect size (HR/RR/OR with an ordered, positive confidence interval) could be parsed from any source."
+          "No ratio effect size (HR/RR/OR with an ordered, positive confidence interval) could be parsed and grounded to any source."
         );
-      }
-
-      // Ground each extracted effect's verbatim `raw` substring; drop the unlocatable.
-      const groundedSpans: GroundedSpan[] = [];
-      for (const e of effects) {
-        const span = groundEffect(e, ctx.sources);
-        if (span !== null) groundedSpans.push(span);
       }
 
       // Per-source counts + rows for the detail panel.

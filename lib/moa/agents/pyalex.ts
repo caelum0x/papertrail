@@ -93,7 +93,9 @@ const agent: MoaAgent = {
         addressable > 0
           ? `Found ${addressable} source(s) with a resolvable DOI/OpenAlex id, but citation ` +
             "velocity needs OpenAlex ingestion context — run via Living Evidence."
-          : "needs OpenAlex ingestion context — run via Living Evidence.";
+          : `Checked ${ctx.sources.length} source(s); none carried a resolvable DOI or ` +
+            "OpenAlex id. Citation velocity requires OpenAlex ingestion context — run via " +
+            "Living Evidence.";
       return skippedContribution(AGENT_ID, summary);
     } catch (err: unknown) {
       return erroredContribution(AGENT_ID, err);

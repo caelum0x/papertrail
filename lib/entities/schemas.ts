@@ -99,6 +99,16 @@ export const LinkedEntitySchema = z.object({
   // When this mention is a defined abbreviation, its resolved long form (used for
   // linking, per scispaCy's resolve_abbreviations). Null otherwise.
   abbreviationOf: z.string().min(1).nullable(),
+}).refine((obj) => obj.start < obj.end, {
+  // Offsets are a half-open [start, end) range: `end` is exclusive so that the located
+  // substring is input.slice(start, end). A valid grounded span is non-empty, so
+  // start must be strictly less than end. Zero-length spans are forbidden here — this
+  // mirrors the `text.min(1)` invariant above (an empty span could carry no text) and
+  // guards against a mocked/buggy NER emitting an inverted or empty range. Grounding in
+  // lib/grounding always returns valid offsets, so this never fires in production; it
+  // hardens the LLM trust boundary against invalid LinkedEntity records.
+  message: "start must be < end (offsets are a non-empty half-open [start, end) range)",
+  path: ["start"],
 });
 export type LinkedEntity = z.infer<typeof LinkedEntitySchema>;
 

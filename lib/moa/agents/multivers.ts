@@ -69,6 +69,10 @@ function signalFromVerdict(verdict: CrossSourceVerdict): AgentSignal {
       return "mixed";
     case "insufficient":
       return "insufficient";
+    default:
+      // Exhaustiveness guard: fail loud if CrossSourceVerdict ever expands. Better a visible
+      // error than a silent `undefined` signal corrupting the deterministic aggregate.
+      throw new Error(`Unexpected cross-source verdict: ${String(verdict)}`);
   }
 }
 
@@ -161,11 +165,44 @@ const agent: MoaAgent = {
       );
       const aggregate = aggregateCrossSource(inputs);
 
+      // Representative scalar of the per-source quality weights this run actually applied, to
+      // propagate to the aggregator's composition trace (detail.qualityWeight). The aggregator
+      // reads its GLOBAL quality multiplier only from paper-qa's own contribution (see
+      // aggregate.ts QUALITY_PRODUCER_ID), so this field is trace-only and cannot double-count
+      // or move trust. When paper-qa's quality is absent every label folds in at face value,
+      // so the representative weight is 1 (no down-weighting occurred).
+      const appliedQualityWeights = quality
+        ? labels.map(
+            (l) => quality.weightById[l.sourceId]?.weight ?? 1
+          )
+        : [];
+      const qualityWeight =
+        appliedQualityWeights.length > 0
+          ? clamp01(
+              appliedQualityWeights.reduce((sum, w) => sum + w, 0) /
+                appliedQualityWeights.length
+            )
+          : 1;
+
       const signal = signalFromVerdict(aggregate.verdict);
 
-      // Confidence is the magnitude of the deterministic net direction in [0,1]: a lopsided
-      // verdict is confident; a mixed/insufficient one (netConfidence ~0) is honestly low.
-      const confidence = clamp01(Math.abs(aggregate.netConfidence));
+      // Confidence = share of DIRECTIONAL evidence mass among all considered mass. It reflects
+      // how much of the body of evidence actually makes a directional (SUPPORTS/REFUTES) claim,
+      // NOT how lopsided that claim is.
+      //
+      // Why not Math.abs(netConfidence): that magnitude collapses to 0 when support and refute
+      // masses are exactly balanced — precisely the strongest conflict case. Since the final
+      // aggregator weights each vote by gate * confidence * categoryWeight, a 0 confidence would
+      // zero out this agent's `mixed` vote and silently drop the conflict signal it just
+      // detected, handing the decision back to Claude-alone. Using directional share keeps a
+      // genuine two-sided conflict at HIGH confidence (it votes `mixed` firmly), while an
+      // all-NEI / no-directional body honestly falls to 0.
+      const { supportMass, refuteMass, neiMass } = aggregate.tally;
+      const totalMass = supportMass + refuteMass + neiMass;
+      const confidence =
+        totalMass > 0
+          ? clamp01((supportMass + refuteMass) / totalMass)
+          : 0;
 
       // Provenance: which agent produced the labels we consumed (for the UI composition trace).
       const labelsProducer = bb.producerOf("source_labels");
@@ -190,6 +227,12 @@ const agent: MoaAgent = {
           neiMass: aggregate.tally.neiMass,
         },
         qualityWeighted,
+        // Numeric mean of the per-source quality weights this run applied (1 => no
+        // down-weighting, e.g. when paper-qa's `quality` artifact was absent). Trace-only:
+        // the aggregator reads its global quality multiplier solely from paper-qa's own
+        // contribution (aggregate.ts QUALITY_PRODUCER_ID), so this scalar never double-counts
+        // quality or moves the trust score — it only makes the applied weighting auditable.
+        qualityWeight,
         // Composition trace: this verifier built on these upstream producers.
         consumedFrom: {
           source_labels: labelsProducer ?? null,

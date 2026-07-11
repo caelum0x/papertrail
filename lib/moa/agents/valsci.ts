@@ -4,6 +4,12 @@
 // PRODUCES one for the deliberation layer:
 //
 //   CONSUMES  source_labels  (MiniCheck) — per-source SUPPORTS/REFUTES/NEI + grounded span.
+//                                          LOAD-BEARING: whether MiniCheck's labels straddle
+//                                          two sides GATES whether we PUBLISH the contested
+//                                          artifact (see publishContested in run) — not just
+//                                          the trace. If neither MiniCheck's labels nor the
+//                                          atlas' own grounded sides straddle, we do not hand
+//                                          STORM an unsourced contradiction.
 //             entities       (scispaCy)  — grounded biomedical mentions, used to enrich the
 //                                          contested detail (what the disagreeing sources are
 //                                          actually about) without changing the verdict.
@@ -59,10 +65,12 @@ import {
   type ResolveInput,
 } from "../../contradiction/atlas";
 import { claudeSourceScorer } from "../../scieval/valsci";
-import type {
-  ContradictionSourceInput,
-  ContradictionAtlasResult,
-  SourceVerdict,
+import {
+  CONFLICT_DIMENSIONS,
+  type ContradictionSourceInput,
+  type ContradictionAtlasResult,
+  type DimensionAttribution,
+  type SourceVerdict,
 } from "../../contradiction/schemas";
 
 const AGENT_ID = "valsci";
@@ -163,17 +171,59 @@ function gate(ctx: OrchestrationContext): number {
   return plausibleDisagreement ? GATE_PLAUSIBLE : GATE_FLOOR;
 }
 
+// The most confidence an honest but unattributed conflict may carry: two real sides exist,
+// but no single design dimension cleanly explains the reversal, so it stays below an
+// attributed reversal. Reached only when BOTH sides report design features on every
+// dimension (full feature coverage).
+const UNATTRIBUTED_CONFIDENCE_CEIL = 0.3;
+
+// A faint, non-zero floor so a genuine two-sided `unattributed_conflict` (which by definition
+// has both a supporting and a refuting side) still casts a whisper of a `mixed` vote even when
+// the atlas grounded zero design features on either side. Deliberately tiny — an evidence-free
+// contradiction should barely register, but not vanish entirely.
+const UNATTRIBUTED_CONFIDENCE_FLOOR = 0.03;
+
+// Deterministic feature-coverage measure in [0,1] for the `unattributed_conflict` outcome:
+// how richly BOTH sides reported grounded design features across the four dimensions. Each
+// side can report at most one differing feature per dimension, so per-side coverage is the
+// count of dimensions that side has a grounded quote on, normalized by the dimension count.
+// The pair coverage is the MEAN of the two sides' coverage — a conflict where only one side
+// reports features scores lower than one where both do. Pure: reads only the deterministic
+// attribution table, never Claude. NO LLM in this numeric path.
+function unattributedFeatureCoverage(attributions: readonly DimensionAttribution[]): number {
+  const maxPerSide = CONFLICT_DIMENSIONS.length; // one feature per dimension per side (always 4).
+  let supportingDims = 0;
+  let refutingDims = 0;
+  for (const a of attributions) {
+    if (a.supporting_quotes.length > 0) supportingDims += 1;
+    if (a.refuting_quotes.length > 0) refutingDims += 1;
+  }
+  const supportingCoverage = supportingDims / maxPerSide;
+  const refutingCoverage = refutingDims / maxPerSide;
+  const meanCoverage = (supportingCoverage + refutingCoverage) / 2;
+  return clamp01(meanCoverage);
+}
+
 // Confidence from the atlas' deterministic resolution strength.
 //   attributed_reversal   -> primary_hypothesis.strength (the winning dimension's strength)
-//   unattributed_conflict -> a modest floor: two real sides exist but no clean attribution
+//   unattributed_conflict -> scaled by how richly BOTH sides reported design features: the
+//                            0.3 ceiling is only reached with full two-sided feature coverage;
+//                            a feature-less contradiction drops toward a faint floor, so a
+//                            conflict attributed to zero design features carries far less
+//                            confidence than one where both sides report on many dimensions.
 //   no_conflict           -> low: sides don't straddle, little for this verifier to add
 //   insufficient          -> 0
 function confidenceOf(result: ContradictionAtlasResult): number {
   switch (result.resolution_category) {
     case "attributed_reversal":
       return clamp01(result.primary_hypothesis?.strength ?? 0.35);
-    case "unattributed_conflict":
-      return 0.3;
+    case "unattributed_conflict": {
+      const coverage = unattributedFeatureCoverage(result.attributions);
+      // Scale the ceiling by feature coverage, but never below a faint non-zero floor so a
+      // real two-sided conflict still votes. e.g. zero coverage -> 0.03; full coverage -> 0.3.
+      const scaled = UNATTRIBUTED_CONFIDENCE_CEIL * coverage;
+      return clamp01(Math.max(UNATTRIBUTED_CONFIDENCE_FLOOR, scaled));
+    }
     case "no_conflict":
       return 0.1;
     case "insufficient":
@@ -377,11 +427,23 @@ const agent: MoaAgent = {
 
       const contested = toContested(result);
 
-      // Only publish a contested artifact when a real two-sided conflict exists — STORM should
-      // debate an actual contradiction, not an empty one.
+      // The atlas independently found both sides present (its signed Valsci support scores
+      // straddle 0). Distinct from MiniCheck's labelledStraddle above.
+      const atlasStraddle = result.supporting_count > 0 && result.refuting_count > 0;
+
+      // A real two-sided conflict category.
       const hasConflict =
         result.resolution_category === "attributed_reversal" ||
         result.resolution_category === "unattributed_conflict";
+
+      // COMPOSITION GUARD (Fix 2 + Fix 3): only PUBLISH the contested artifact when a genuine
+      // two-sided conflict exists AND it aligns with what the pipeline actually saw — either
+      // MiniCheck's consumed labels straddled two sides, or the atlas' own grounded sides did.
+      // This makes the CONSUMED source_labels load-bearing on the PRODUCED artifact (not just
+      // the trace): if MiniCheck labelled every source the same way (labelledStraddle=false)
+      // AND the atlas found no independent straddle, we DO NOT hand STORM an unsourced
+      // contradiction. Deterministic gate — no LLM, grounded in upstream composition.
+      const publishContested = hasConflict && (labelledStraddle || atlasStraddle);
 
       const entityCount = entities ? entities.length : 0;
       const contestedEntities = summarizeContestedEntities(entities, contested.sourceIds);
@@ -422,12 +484,17 @@ const agent: MoaAgent = {
           below_floor_count: result.below_floor_count,
           grounding_dropped_count: result.grounding_dropped_count,
           feature_grounding_dropped_count: result.feature_grounding_dropped_count,
-          published_contested: hasConflict,
+          // Trace the full gate: a conflict category alone no longer publishes — it must also
+          // align with MiniCheck's labelled sides or the atlas' own grounded straddle.
+          has_conflict: hasConflict,
+          atlas_straddle: atlasStraddle,
+          published_contested: publishContested,
         },
         groundedSpans: collectSpans(result),
         usedClaude: true,
-        // PRODUCE the contested artifact only when there is a genuine conflict for STORM.
-        produced: hasConflict ? { contested } : {},
+        // PRODUCE the contested artifact only when a genuine conflict exists AND it aligns with
+        // the consumed source_labels (or the atlas' own grounded sides) — see publishContested.
+        produced: publishContested ? { contested } : {},
       });
     } catch (err) {
       return erroredContribution(AGENT_ID, err);

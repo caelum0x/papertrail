@@ -52,6 +52,39 @@ const VOTES: ReadonlySet<AgentSignal> = new Set(["supports", "refutes", "mixed"]
 const DOMINANCE = 0.6;
 const CONTEST = 0.3;
 
+// The SINGLE agent allowed to set the global quality multiplier. `quality` is a first-class
+// artifact PRODUCED only by paper-qa (see types.ts ArtifactKind "quality" + registry.ts).
+// Reading the multiplier from exactly one producer closes three composition hazards:
+//   1. verifiers already fold each source's own quality weight into their per-label
+//      confidence upstream — so any second per-source quality signal reaching the mix would
+//      DOUBLE-COUNT quality; only paper-qa's *collective* meanWeight belongs at the global
+//      level, and nothing else may inject a competing per-source weight here;
+//   2. an overwrite bug: reading `qualityWeight` from every contribution let the LAST one in
+//      the array silently win; pinning the producer makes the multiplier deterministic
+//      regardless of agent ordering;
+//   3. an implicit dependency: any verifier that put `qualityWeight` in `detail` for tracing
+//      would accidentally move the trust score. The contract is now explicit — only this id.
+const QUALITY_PRODUCER_ID = "paperqa";
+
+// Map paper-qa's collective meanWeight in [0,1] to a gentle global trust multiplier in
+// [0.5,1]. A floor of 0.5 keeps low-tier bodies of evidence from collapsing to 0 while still
+// rewarding high-quality evidence. Kept identical to the prior formula for stability.
+function qualityMultiplierFrom(meanQualityWeight: number): number {
+  return clamp01(meanQualityWeight) * 0.5 + 0.5;
+}
+
+// Read the global quality multiplier from EXACTLY the producer of the `quality` artifact.
+// Verifier `detail` fields (even ones that happen to carry a `qualityWeight` for tracing)
+// are ignored, so they can neither overwrite nor double-apply the multiplier.
+function readQualityMult(weighted: readonly WeightedContribution[]): number {
+  const producer = weighted.find((w) => w.agentId === QUALITY_PRODUCER_ID);
+  const q = producer?.contribution.detail?.["qualityWeight"];
+  if (typeof q === "number" && Number.isFinite(q)) {
+    return qualityMultiplierFrom(q);
+  }
+  return 1;
+}
+
 /**
  * Deterministically mix weighted agent votes into a verdict + trust score. Pure: no I/O,
  * no LLM, inputs never mutated. Honest "insufficient" when nothing voted.
@@ -63,7 +96,10 @@ export function aggregate(weighted: readonly WeightedContribution[]): MoaAggrega
   let mixed = 0;
   let voted = 0;
   let ran = 0;
-  let qualityMult = 1;
+
+  // Global quality multiplier: read ONCE from the sole `quality` producer (paper-qa), before
+  // the vote loop and independent of iteration order. See QUALITY_PRODUCER_ID above.
+  const qualityMult = readQualityMult(weighted);
 
   for (const w of weighted) {
     const c = w.contribution;
@@ -77,11 +113,6 @@ export function aggregate(weighted: readonly WeightedContribution[]): MoaAggrega
       if (c.signal === "supports") supports += weight;
       else if (c.signal === "refutes") refutes += weight;
       else mixed += weight;
-    }
-
-    const q = c.detail?.["qualityWeight"];
-    if (typeof q === "number" && Number.isFinite(q)) {
-      qualityMult = clamp01(q) * 0.5 + 0.5;
     }
   }
 

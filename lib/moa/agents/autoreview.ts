@@ -205,6 +205,76 @@ function parseProse(value: unknown): ProseResponse {
   return { summary: summary.trim().slice(0, 600) };
 }
 
+// Forbidden tokens that would turn neutral connective prose into an implicit verdict, a causation
+// claim, or an unquantified strength assertion — none of which autoreview is allowed to make (the
+// verdict is decided deterministically downstream, never worded here). Matched case-insensitively
+// as whole words so the neutral noun "evidence" or the source-count verbs in the deterministic
+// fallback are never the thing being screened (we only screen CLAUDE's rewrite, below).
+const FORBIDDEN_PROSE_TOKENS: readonly string[] = [
+  // verdict / conclusion language
+  "conclude",
+  "concludes",
+  "concluded",
+  "conclusion",
+  "conclusive",
+  "inconclusive",
+  "prove",
+  "proves",
+  "proven",
+  "proved",
+  "demonstrate",
+  "demonstrates",
+  "demonstrated",
+  "confirm",
+  "confirms",
+  "confirmed",
+  "establish",
+  "establishes",
+  "established",
+  "verified",
+  "refuted",
+  "disproven",
+  "debunk",
+  "debunks",
+  "debunked",
+  // hedged-verdict / strength assertions that quantify without a given number
+  "suggests",
+  "suggesting",
+  "indicates",
+  "indicating",
+  "implies",
+  "implying",
+  "strongly",
+  "clearly",
+  "definitively",
+  "convincingly",
+  "compelling",
+  "robustly",
+  "overwhelming",
+  "conclusively",
+  // causation claims
+  "causes",
+  "caused",
+  "causing",
+  "causal",
+  "causation",
+  "leads to",
+  "results in",
+  "due to",
+  "because of",
+];
+
+// Whole-word (or whole-phrase for multi-word tokens) match so we do not false-positive on
+// substrings (e.g. "cause" inside "because" is handled by listing the exact phrases we forbid).
+function violatesNeutralProse(prose: string): boolean {
+  const lower = prose.toLowerCase();
+  return FORBIDDEN_PROSE_TOKENS.some((token) => {
+    // Word-boundary regex; tokens are literal (no regex metachars in the list above).
+    const pattern = new RegExp(`(^|[^a-z])${token}([^a-z]|$)`, "i");
+    return pattern.test(lower);
+  });
+}
+
 function buildProseUser(
   claim: string,
   supporting: readonly Candidate[],
@@ -242,6 +312,12 @@ async function connectiveSummary(
       schema: { parse: parseProse },
       maxTokens: 256,
     });
+    // Post-hoc guard: the prompt forbids verdict/causation/strength language, but a prose that
+    // sneaks it in would silently violate the neutral-prose contract. Screen CLAUDE's rewrite
+    // ONLY (never the deterministic fallback) and reject to the deterministic summary if it does.
+    if (violatesNeutralProse(raw.summary)) {
+      return fallback;
+    }
     return raw.summary;
   } catch {
     return fallback;
@@ -306,13 +382,19 @@ const agent: MoaAgent = {
       const refuting = orderSide(candidates, "REFUTES");
       const selected = [...supporting, ...refuting];
 
-      // Coverage = fraction of labeled sources that contributed a grounded citation. This is the
-      // review's confidence: a review that grounds more of the evidence base is more complete.
+      // Confidence = review UTILITY, calibrated to the breadth of grounded sources it actually
+      // cites rather than penalizing it for labels that were ungroundable through no fault of the
+      // review. Once we ground MIN_GROUNDED_SOURCES distinct sources we have a real, useful review,
+      // so the metric saturates at 1.0 there (distinct / max(distinct, MIN_GROUNDED_SOURCES)); a
+      // partially-grounded review below the floor still reads honestly lower. Deterministic — no
+      // LLM touches this number. `labeledCount` is retained for the trace only (see detail below).
       const labeledCount = labels.filter(
         (l) => l.label === "SUPPORTS" || l.label === "REFUTES"
       ).length;
-      const coverage =
-        labeledCount > 0 ? clamp01(distinctSources.size / labeledCount) : 0;
+      const coverage = clamp01(
+        distinctSources.size /
+          Math.max(distinctSources.size, MIN_GROUNDED_SOURCES)
+      );
 
       const entityNames = entityNamesFrom(entities);
       const baseSummary = deterministicSummary(

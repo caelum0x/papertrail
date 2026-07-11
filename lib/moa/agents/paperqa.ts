@@ -99,19 +99,46 @@ const agent: MoaAgent = {
       const metas = ctx.sources.map(toQualityMeta);
       const results = scoreSourceQualityBatch(metas);
 
+      // INVARIANT: scoreSourceQualityBatch is `metas.map(scoreSourceQuality)`, so
+      // results.length === metas.length === ctx.sources.length (> 0 here, guarded above).
+      // The explicit guard makes that invariant enforced rather than assumed: if the scorer
+      // ever returned [] for a non-empty input, the mean below would divide by zero. Rather
+      // than emit a NaN-derived (clamped-to-0) weight silently, we skip honestly. (fix 2)
+      if (results.length === 0) {
+        return skippedContribution(
+          AGENT_ID,
+          "No sources scored by sourceQuality — nothing to weight."
+        );
+      }
+
       // Build the typed `quality` artifact for downstream consumers.
       const weightById: SourceQuality["weightById"] = {};
       for (const r of results) {
         weightById[r.id] = { tier: r.tier, weight: r.weight };
       }
 
+      const retractedIds = results.filter((r) => r.retracted).map((r) => r.id);
+
+      // Total-evidence-collapse detector: every source in the mix is retracted (each such
+      // source is hard-capped to Tier D / weight 0 by the scorer). This is NOT the same as
+      // "low quality" — it means the entire body of evidence is broken and the composition
+      // has nothing trustworthy to stand on. We surface it explicitly (fix 1).
+      const allRetracted = retractedIds.length === results.length;
+
       // Mean quality weight: how much trust the tiers collectively confer on the available
       // evidence. Deterministic, in [0,1]. This is the trust multiplier the aggregator reads.
-      const meanWeight = clamp01(
-        results.reduce((sum, r) => sum + r.weight, 0) / results.length
-      );
-
-      const retractedIds = results.filter((r) => r.retracted).map((r) => r.id);
+      // When ALL sources are retracted we pin the collective weight to exactly 0 (defending
+      // against float dust from the sum) so the "all evidence is broken" signal is emitted at
+      // its true floor. NOTE: the aggregator (aggregate.ts:qualityMultiplierFrom) currently
+      // maps any weight through q*0.5+0.5, so a 0 here still becomes a 0.5 multiplier there —
+      // the total-collapse signal cannot be fully honored without correcting that floor in
+      // aggregate.ts, which is out of this file's scope. Emitting a hard 0 (plus the explicit
+      // allRetracted flag below) preserves the signal so the fix in the aggregator lands cleanly.
+      const meanWeight = allRetracted
+        ? 0
+        : clamp01(
+            results.reduce((sum, r) => sum + r.weight, 0) / results.length
+          );
 
       const qualityArtifact: SourceQuality = {
         weightById,
@@ -132,8 +159,9 @@ const agent: MoaAgent = {
         return acc;
       }, {});
 
-      const summary =
-        retractedIds.length > 0
+      const summary = allRetracted
+        ? `ALL ${results.length} source${results.length === 1 ? " is" : "s are"} RETRACTED (Tier D, weight 0) — the entire body of evidence is broken; collective trust weight 0.00.`
+        : retractedIds.length > 0
           ? `${retractedIds.length} RETRACTED source${retractedIds.length === 1 ? "" : "s"} flagged (Tier D, weight 0) — evidence down-weighted; tiered ${results.length} source${results.length === 1 ? "" : "s"}, mean trust ${meanWeight.toFixed(2)}.`
           : `Tiered ${results.length} source${results.length === 1 ? "" : "s"} by quality; mean trust weight ${meanWeight.toFixed(2)}.`;
 
@@ -152,6 +180,10 @@ const agent: MoaAgent = {
           tierCounts,
           retractedIds,
           retractedCount: retractedIds.length,
+          // Explicit total-collapse flag: true when every source is retracted. Lets a
+          // corrected aggregator (or the UI) recognize broken-evidence bodies without
+          // re-deriving it, and distinguishes "0 because all retracted" from "0 by chance".
+          allRetracted,
           perSource: detailRows,
         },
         // No grounded quotes: tiering reads metadata only, never the source body.

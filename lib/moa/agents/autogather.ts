@@ -13,7 +13,8 @@
 // lens the claim implies (e.g. the claim asserts a mechanism but no source discusses one).
 // So the vote is `neutral` when coverage is adequate and `insufficient` when a MAJOR facet
 // is left uncovered — an honest "we cannot fully verify from what we have," never a forced
-// directional read. Confidence is the coverage fraction.
+// directional read. Confidence is the coverage fraction SCALED BY SCOPE (how many distinct
+// entities were actually tested), so a thin, narrow read is honestly down-weighted.
 //
 // COMPOSITION CONTRACT (LAYER 3 · DELIBERATION)
 //   produces: [] — deliberation/context. It writes no artifact other agents consume and casts
@@ -177,6 +178,19 @@ const STOP_WORDS = new Set<string>([
   "percent",
 ]);
 
+// The single-word cue terms across every facet (multi-word cues like "hazard ratio" can never be a
+// single claim token, so they are irrelevant to the token-fallback filter). A claim word that is
+// ALSO a facet cue ("reduced", "response", "survival", "mortality"…) signals what the claim is
+// ABOUT — it must NOT be discarded as a stop-word in the fallback seeding path (fix 4).
+const FACET_CUE_TERMS: ReadonlySet<string> = new Set<string>(
+  FACETS.flatMap((f) => f.cues).filter((c) => !c.includes(" "))
+);
+
+// Round to 4 decimals for a stable, readable trace (numbers only; never touches the vote path).
+function round4(n: number): number {
+  return Math.round(n * 1e4) / 1e4;
+}
+
 function hasUsableText(source: MoaSource): boolean {
   return typeof source.text === "string" && source.text.trim().length > 0;
 }
@@ -185,16 +199,58 @@ function usableSourceCount(sources: readonly MoaSource[]): number {
   return sources.filter(hasUsableText).length;
 }
 
-// Normalize into a space-padded, single-spaced, alphanumeric token stream so cue/entity matches
-// are whole-word (case-insensitive) runs — deterministic, no accidental substrings.
-function normalize(text: string): string {
-  return ` ${text.toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim()} `;
+// Transliterate the Greek letters common in biomedical entity names (TNF-α, IL-6β, IFN-γ) to
+// their ASCII counterparts BEFORE the alphanumeric strip. Without this, `[^a-z0-9]+` deletes the
+// Greek codepoint outright, so "TNF-α" would normalize to "tnf" and never match a source that
+// writes the same entity as "TNF-α" — a whole class of missed coverage. Deterministic 1:1 map.
+const GREEK_TO_ASCII: ReadonlyArray<readonly [RegExp, string]> = [
+  [/[αΑ]/g, "a"],
+  [/[βΒ]/g, "b"],
+  [/[γΓ]/g, "g"],
+  [/[δΔ]/g, "d"],
+  [/[εΕ]/g, "e"],
+  [/[ζΖ]/g, "z"],
+  [/[ηΗ]/g, "h"],
+  [/[θΘ]/g, "th"],
+  [/[ιΙ]/g, "i"],
+  [/[κΚ]/g, "k"],
+  [/[λΛ]/g, "l"],
+  [/[μΜ]/g, "u"],
+  [/[νΝ]/g, "n"],
+  [/[ξΞ]/g, "x"],
+  [/[οΟ]/g, "o"],
+  [/[πΠ]/g, "p"],
+  [/[ρΡ]/g, "r"],
+  [/[σςΣ]/g, "s"],
+  [/[τΤ]/g, "t"],
+  [/[υΥ]/g, "u"],
+  [/[φΦ]/g, "ph"],
+  [/[χΧ]/g, "ch"],
+  [/[ψΨ]/g, "ps"],
+  [/[ωΩ]/g, "o"],
+];
+
+function transliterateGreek(text: string): string {
+  let out = text;
+  for (const [pattern, replacement] of GREEK_TO_ASCII) {
+    out = out.replace(pattern, replacement);
+  }
+  return out;
 }
 
-// A term matches when it appears as a whole-word token run inside the normalized text.
+// Normalize into a space-padded, single-spaced, alphanumeric token stream so cue/entity matches
+// are whole-word (case-insensitive) runs — deterministic, no accidental substrings. Greek letters
+// are transliterated to ASCII first so biomedical entities survive the alphanumeric strip.
+function normalize(text: string): string {
+  return ` ${transliterateGreek(text.toLowerCase()).replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim()} `;
+}
+
+// A term matches when it appears as a whole-word token run inside the normalized text. The term is
+// run through the SAME Greek transliteration + alphanumeric normalization as the source text (see
+// normalize()), so entities like "TNF-α" ("tnf a") match a source that mentions "TNF-α" rather than
+// stripping to "tnf" on one side and "tnf a" on the other. Keeps both sides symmetric.
 function termMatches(normalizedText: string, term: string): boolean {
-  const normalizedTerm = term
-    .toLowerCase()
+  const normalizedTerm = transliterateGreek(term.toLowerCase())
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -232,7 +288,9 @@ function keyEntities(
   const seen = new Set<string>();
   const terms: string[] = [];
   for (const raw of claim.toLowerCase().split(/[^a-z0-9]+/)) {
-    if (raw.length < 4 || STOP_WORDS.has(raw) || seen.has(raw)) continue;
+    // Keep a token if it is a facet cue even when it is also a stop-word ("reduced", "response"…):
+    // that word is the claim's efficacy/safety signal, not filler (fix 4).
+    if (raw.length < 4 || (STOP_WORDS.has(raw) && !FACET_CUE_TERMS.has(raw)) || seen.has(raw)) continue;
     seen.add(raw);
     terms.push(raw);
     if (terms.length >= MAX_KEY_ENTITIES) break;
@@ -255,12 +313,21 @@ interface NormalizedSource {
   normalized: string;
   rawText: string;
   rank: number; // Loki relevance rank in [0,1]; 1 when no relevance artifact.
+  originalIndex: number; // position in the input `usable` order — the true stable tie-break.
 }
 
 // Generate the deterministic sub-query grid (facet × entity) and measure coverage against the
 // on-topic sources. A sub-query is covered when some source mentions BOTH the entity and one of
 // the facet's cues. Sources are visited in descending relevance rank so the first cover cue is
 // the most on-topic one (stable tie-break on input order via the pre-sorted list).
+//
+// SCOPE (fix 7): this measures DIRECT, single-source coverage — the entity AND the cue must appear
+// in the SAME source. It deliberately does NOT do cross-source entailment (Source A proves efficacy,
+// Source B proves the population → "efficacy in this population"). That is an intentional honesty
+// guarantee: chaining findings across independent sources is exactly how false-positive "coverage"
+// is manufactured, and this agent's job is to report GAPS honestly, not to synthesize. Cross-source
+// composition/entailment belongs to a dedicated synthesis agent (e.g. valsci / an evidence
+// integrator) that owns that reasoning and its own confidence — not to this coverage meter.
 function generateAndCover(
   keyTerms: readonly string[],
   sources: readonly NormalizedSource[]
@@ -293,10 +360,61 @@ function generateAndCover(
 
 // Locate a verbatim covering substring in a source's raw text for a grounded span: the exact
 // matched cue term as it appears in the source (case-insensitive locate, verbatim slice).
-function locateCue(rawText: string, cue: string): GroundedSpan | null {
-  const idx = rawText.toLowerCase().indexOf(cue.toLowerCase());
-  if (idx < 0) return null;
-  return { sourceId: "", text: rawText.slice(idx, idx + cue.length), start: idx, end: idx + cue.length };
+//
+// SEMANTICS (fix 1): the returned span is a REPRESENTATIVE location of the cue, not a
+// clinically-validated position. A cue may occur many times in one source under different
+// contexts (one supported, one negated). To bias toward the semantically relevant occurrence,
+// when the entity is known we choose the cue occurrence NEAREST to any mention of that entity
+// (the covered sub-query is entity × cue, so proximity is the best deterministic proxy for "this
+// cue is talking about this entity"). Absent an entity hit we fall back to the first occurrence.
+// This is a heuristic locator for the UI trace — downstream consumers must not treat the returned
+// position as an assertion that the cue is used in a *supporting* sense; the vote path never reads
+// span positions, only the deterministic coverage counts.
+//
+// The sourceId is passed in and stamped immediately (fix 3), so the span is valid the moment it is
+// returned — no downstream destructure-and-reassign is required to make it correct.
+function locateCue(sourceId: string, rawText: string, cue: string, entity: string): GroundedSpan | null {
+  const lowerRaw = rawText.toLowerCase();
+  const lowerCue = cue.toLowerCase();
+  const firstIdx = lowerRaw.indexOf(lowerCue);
+  if (firstIdx < 0) return null;
+
+  // Prefer the cue occurrence closest to an entity mention (representative, not just first).
+  const lowerEntity = transliterateGreek(entity.toLowerCase()).replace(/[^a-z0-9]+/g, " ").trim();
+  let bestIdx = firstIdx;
+  if (lowerEntity.length > 0) {
+    // Collect every cue occurrence, then pick the one nearest to any entity token occurrence.
+    const cueIdxs: number[] = [];
+    for (let i = lowerRaw.indexOf(lowerCue); i >= 0; i = lowerRaw.indexOf(lowerCue, i + 1)) {
+      cueIdxs.push(i);
+    }
+    const firstEntityToken = lowerEntity.split(" ")[0] ?? "";
+    if (firstEntityToken.length > 0) {
+      const entityIdxs: number[] = [];
+      for (let i = lowerRaw.indexOf(firstEntityToken); i >= 0; i = lowerRaw.indexOf(firstEntityToken, i + 1)) {
+        entityIdxs.push(i);
+      }
+      if (entityIdxs.length > 0) {
+        let bestDistance = Number.POSITIVE_INFINITY;
+        for (const ci of cueIdxs) {
+          for (const ei of entityIdxs) {
+            const distance = Math.abs(ci - ei);
+            if (distance < bestDistance) {
+              bestDistance = distance;
+              bestIdx = ci;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return {
+    sourceId,
+    text: rawText.slice(bestIdx, bestIdx + cue.length),
+    start: bestIdx,
+    end: bestIdx + cue.length,
+  };
 }
 
 const agent: MoaAgent = {
@@ -307,7 +425,7 @@ const agent: MoaAgent = {
     "Deliberation: decomposes the claim into per-facet sub-queries (facet × the key entities " +
     "scispaCy grounded) and measures which are covered by the on-topic sources Loki ranked vs. " +
     "which are GAPS — trusted sources only, no live fetch. Votes insufficient on a major gap, " +
-    "neutral otherwise; confidence is the coverage fraction. Casts no support/refute vote.",
+    "neutral otherwise; confidence is the coverage fraction scaled by scope. Casts no support/refute vote.",
 
   // Deliberation/context: reports a coverage map; produces no consumable artifact.
   produces: [] as const,
@@ -340,15 +458,20 @@ const agent: MoaAgent = {
       // artifact, every usable source counts with a neutral rank of 1.
       const droppedIds = new Set<string>(relevance?.droppedIds ?? []);
       const rankById = relevance?.rankById ?? {};
+      // Capture each source's ORIGINAL input position BEFORE the relevance filter, then sort by
+      // descending rank with the input position (not the lexicographic id) as the stable tie-break —
+      // so ties resolve to the source that arrived first, matching the documented intent (fix 6).
       const onTopic: NormalizedSource[] = usable
-        .filter((s) => !droppedIds.has(s.id))
-        .map((s) => ({
+        .map((s, originalIndex) => ({ s, originalIndex }))
+        .filter(({ s }) => !droppedIds.has(s.id))
+        .map(({ s, originalIndex }) => ({
           id: s.id,
           normalized: normalize(`${s.title ?? ""} ${s.text}`),
           rawText: s.text,
           rank: clamp01(rankById[s.id] ?? 1),
+          originalIndex,
         }))
-        .sort((a, b) => (b.rank !== a.rank ? b.rank - a.rank : a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+        .sort((a, b) => (b.rank !== a.rank ? b.rank - a.rank : a.originalIndex - b.originalIndex));
 
       // If relevance dropped every source, there is no on-topic evidence to gather over.
       if (onTopic.length === 0) {
@@ -374,6 +497,14 @@ const agent: MoaAgent = {
       const gaps = subQueries.filter((q) => !q.covered);
       const coverageFraction = clamp01(total > 0 ? covered.length / total : 0);
 
+      // Confidence must reflect SCOPE, not just coverage fraction (fix 5): 75% coverage of a single
+      // entity is far weaker evidence than 75% coverage across many distinct entities. The scope
+      // factor `1 - exp(-k/2)` is ~0.39 at k=1, ~0.63 at k=2, ~0.86 at k=4, ~0.95 at k=6 — it
+      // dampens narrow-scope confidence and saturates as scope broadens, so the aggregate never
+      // over-trusts a thin autogather read. Purely deterministic; no LLM in the scoring path.
+      const scopeFactor = 1 - Math.exp(-keyTerms.length / 2);
+      const confidence = clamp01(coverageFraction * scopeFactor);
+
       // A MAJOR gap is an uncovered major-facet sub-query — the honest trigger for `insufficient`.
       const majorGaps = gaps.filter((q) => q.major);
       const signal = majorGaps.length > 0 ? "insufficient" : "neutral";
@@ -389,8 +520,10 @@ const agent: MoaAgent = {
         if (firstId === undefined) continue;
         const rawText = rawById.get(firstId);
         if (rawText === undefined) continue;
-        const span = locateCue(rawText, q.matchedCue);
-        if (span !== null) groundedSpans.push({ ...span, sourceId: firstId });
+        // sourceId is stamped inside locateCue — the span is valid on return (fix 3), and the
+        // location is biased toward this sub-query's entity for semantic relevance (fix 1).
+        const span = locateCue(firstId, rawText, q.matchedCue, q.entity);
+        if (span !== null) groundedSpans.push(span);
       }
 
       const summary =
@@ -405,7 +538,7 @@ const agent: MoaAgent = {
       return makeContribution(AGENT_ID, {
         ran: true,
         signal,
-        confidence: coverageFraction,
+        confidence,
         summary,
         detail: {
           // The generated grid + the coverage measurement (spec: subQueries, covered, gaps).
@@ -425,6 +558,10 @@ const agent: MoaAgent = {
           gapCount: gaps.length,
           majorGapCount: majorGaps.length,
           coverageFraction,
+          // Scope-calibrated confidence (fix 5): coverageFraction damped by how many distinct
+          // entities were actually tested, so a thin (narrow-scope) read never over-trusts.
+          scopeFactor: round4(scopeFactor),
+          confidence: round4(confidence),
           // Composition provenance: what upstream artifacts autogather actually consumed.
           keyEntities: keyTerms,
           entitySeedSource: entitySource,

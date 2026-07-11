@@ -66,6 +66,9 @@ const TIER_LABEL: Record<SourceQualityTier, string> = {
 interface NormalizedMeta {
   id: string;
   journal: string | null;
+  // Validated publication year, or null when missing/unknown/out-of-range. Not a scoring
+  // input today; carried through so any consumer sees a real year or null, never garbage.
+  year: number | null;
   citations: number;
   isPreprint: boolean;
   isOpenAccess: boolean;
@@ -87,6 +90,26 @@ function asNonNegInt(value: unknown): number {
   return n < 0 ? 0 : n;
 }
 
+// Earliest plausible publication year for a modern indexed source. Anything below this
+// (e.g. a negative year, or `0` from a defaulted field) is corrupt metadata, not a real
+// date, and is treated as unknown rather than silently accepted as an ancient paper.
+export const MIN_PLAUSIBLE_YEAR = 1800;
+
+// A validated publication year, or null when the field is missing/unknown/out-of-range.
+// A source with `year: 999999` (or a negative year) is NOT a modern paper — it is corrupt
+// metadata, so we treat it as unknown (null) instead of accepting it at face value. The
+// upper bound is currentYear+1 to allow legitimate "in press"/next-issue dates without
+// admitting far-future garbage. This narrows the optional interface field defensively;
+// year is not itself a scoring input, so this changes no tier/weight math — it only
+// guarantees any future consumer of the normalized year sees a real year or null.
+function asPlausibleYear(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  const n = Math.trunc(value);
+  const maxYear = new Date().getUTCFullYear() + 1;
+  if (n < MIN_PLAUSIBLE_YEAR || n > maxYear) return null;
+  return n;
+}
+
 function asBool(value: unknown): boolean {
   return value === true;
 }
@@ -104,7 +127,16 @@ function normalizeMeta(meta: SourceQualityMeta): NormalizedMeta {
   return {
     id: meta.id,
     journal: asOptionalString(meta.journal),
+    year: asPlausibleYear(meta.year),
     citations: asNonNegInt(meta.citations),
+    // DELIBERATE CONSERVATISM CONTRACT: a missing or null `is_preprint` is treated as
+    // `false` (i.e. "not explicitly a preprint"). This does NOT auto-promote such a source
+    // to a reviewed tier — tiering also requires `journal` metadata to be present (see
+    // `isPeerReviewed` below). A source with no journal AND no explicit preprint flag still
+    // falls to Tier C ("Unknown venue"), which is the conservative, unreviewed outcome. We
+    // do not add an "unknown" tier: SourceQualityTier is a public A/B/C/D union consumed by
+    // the MoA layer, and widening it would break that contract. Tier C already encodes the
+    // "assume unreviewed" stance for absent metadata, so the conservative intent is met.
     isPreprint: asBool(meta.is_preprint),
     isOpenAccess: asBool(meta.is_open_access),
     // A Retraction Watch id is itself proof of retraction, so it OR's into the flag.

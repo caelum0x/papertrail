@@ -53,9 +53,14 @@ import {
 
 const AGENT_ID = "minicheck";
 
-// One usable source is enough to entail against; extra sources marginally raise relevance.
-const GATE_MULTI_SOURCE = 0.9;
-const GATE_SINGLE_SOURCE = 0.9;
+// CALIBRATED GATE (deterministic, input-only — no LLM, no blackboard). Label reliability
+// scales with evidence density: more on-topic sources and longer source text both raise the
+// expected quality of the resulting verdict. We therefore scale the gate from a floor toward a
+// ceiling as usable-source count and mean text length grow, instead of a flat constant.
+const GATE_FLOOR = 0.5; // one sparse source: eligible, but modest
+const GATE_CEILING = 0.95; // saturates well before certainty
+const GATE_PER_SOURCE = 0.05; // each usable source adds this much
+const GATE_PER_CHAR = 0.0001; // each char of mean source length adds this much
 
 // The MoA three-way label consumers read off the blackboard.
 type MoaLabel = SourceLabel["label"];
@@ -83,7 +88,9 @@ function moaLabelFromAbsence(label: AbsenceLabel): MoaLabel {
 // The engine already returns supporting_span.text as a located verbatim substring of the
 // source; surface it as a typed GroundedSpan, or null when nei / ungroundable.
 function spanFromResult(sourceId: string, result: VerifyAbsenceResult): GroundedSpan | null {
-  if (result.supporting_span === null) return null;
+  // Defensive: verifyAbsenceClaim never emits a non-null supporting_span with null grounding,
+  // but a grounded span with no location would be unusable — treat either as "ungrounded".
+  if (result.supporting_span === null || result.supporting_span.grounding === null) return null;
   return {
     sourceId,
     text: result.supporting_span.text,
@@ -120,9 +127,14 @@ const agent: MoaAgent = {
   // carry verifiable text. No I/O, no LLM, no blackboard read, no throwing.
   gate(ctx: OrchestrationContext): number {
     if (ctx.claim.trim().length === 0) return 0;
-    const usable = ctx.sources.filter((s) => hasVerifiableText(s.text)).length;
+    const usableSources = ctx.sources.filter((s) => hasVerifiableText(s.text));
+    const usable = usableSources.length;
     if (usable === 0) return 0;
-    return usable === 1 ? GATE_SINGLE_SOURCE : GATE_MULTI_SOURCE;
+    // Evidence density: one short source -> near the floor; many long sources -> near the ceiling.
+    const meanLength =
+      usableSources.reduce((sum, s) => sum + s.text.trim().length, 0) / usable;
+    const scaled = GATE_FLOOR + GATE_PER_SOURCE * usable + GATE_PER_CHAR * meanLength;
+    return clamp01(Math.min(GATE_CEILING, scaled));
   },
 
   async run(ctx: OrchestrationContext, bb: Blackboard): Promise<AgentContribution> {
@@ -166,26 +178,47 @@ const agent: MoaAgent = {
         result: VerifyAbsenceResult;
         moaLabel: MoaLabel;
         qualityWeight: number;
+        rawConfidence: number;
         weightedConfidence: number;
         span: GroundedSpan | null;
       }> = [];
 
+      // Per-source isolation (fix 4): one source failing (schema/parse/timeout) must NOT discard
+      // the labels for sources that already succeeded. Skip the failing source, keep going, and
+      // report how many of M we actually evaluated so consumers can judge the label set's breadth.
+      const failedSourceIds: string[] = [];
       for (const source of usableSources) {
-        const result = await verifyAbsenceClaim({ claim, sourceText: source.text });
-        const moaLabel = moaLabelFromAbsence(result.label);
-        const qualityWeight = qualityWeightFor(quality, source.id);
-        // Down-weight the raw engine confidence by the source's quality weight. NEI carries no
-        // decisive confidence, so it stays at 0 regardless of quality.
-        const weightedConfidence =
-          moaLabel === "NEI" ? 0 : clamp01(result.score * qualityWeight);
-        evaluated.push({
-          source,
-          result,
-          moaLabel,
-          qualityWeight,
-          weightedConfidence,
-          span: spanFromResult(source.id, result),
-        });
+        try {
+          const result = await verifyAbsenceClaim({ claim, sourceText: source.text });
+          const moaLabel = moaLabelFromAbsence(result.label);
+          const qualityWeight = qualityWeightFor(quality, source.id);
+          // rawConfidence is the engine's un-down-weighted score for a decisive judgement; the
+          // weighted one folds in the source's quality. NEI carries no decisive confidence, so
+          // its weighted value stays 0 regardless of quality (see NEI note in the vote block).
+          const rawConfidence = moaLabel === "NEI" ? 0 : clamp01(result.score);
+          const weightedConfidence =
+            moaLabel === "NEI" ? 0 : clamp01(result.score * qualityWeight);
+          evaluated.push({
+            source,
+            result,
+            moaLabel,
+            qualityWeight,
+            rawConfidence,
+            weightedConfidence,
+            span: spanFromResult(source.id, result),
+          });
+        } catch {
+          // This one source could not be verified; record and continue with the rest.
+          failedSourceIds.push(source.id);
+        }
+      }
+
+      // If EVERY source failed, we have nothing to label — honest skip rather than a fake verdict.
+      if (evaluated.length === 0) {
+        return skippedContribution(
+          AGENT_ID,
+          `MiniCheck could not verify any of ${usableSources.length} on-topic source(s); no labels produced.`
+        );
       }
 
       // PRODUCE: the per-source labels artifact. Confidence is the quality-down-weighted score;
@@ -199,15 +232,33 @@ const agent: MoaAgent = {
 
       // VOTE: the single strongest DECISIVE label (SUPPORTS/REFUTES), by down-weighted
       // confidence. Fall back to the strongest overall (an NEI) only when nothing was decisive.
+      //
+      // Deterministic tie-break (fix 2): all-NEI fallback entries share weightedConfidence = 0, so
+      // a bare `>` comparator would just keep whichever the filter yielded first (source-order
+      // dependent). We break ties on the raw model score (more evidence of "neither"), then on
+      // source id, so the representative NEI is a stable function of the inputs — not array order.
+      const pickBest = (a: (typeof evaluated)[number], b: (typeof evaluated)[number]) => {
+        if (b.weightedConfidence !== a.weightedConfidence) {
+          return b.weightedConfidence > a.weightedConfidence ? b : a;
+        }
+        if (b.result.score !== a.result.score) {
+          return b.result.score > a.result.score ? b : a;
+        }
+        return b.source.id > a.source.id ? b : a;
+      };
       const decisive = evaluated.filter((e) => e.moaLabel !== "NEI");
       const best =
-        decisive.length > 0
-          ? decisive.reduce((a, b) => (b.weightedConfidence > a.weightedConfidence ? b : a))
-          : evaluated.reduce((a, b) => (b.weightedConfidence > a.weightedConfidence ? b : a));
+        decisive.length > 0 ? decisive.reduce(pickBest) : evaluated.reduce(pickBest);
 
       // Map the winning label to a directional MoA signal. SUPPORTS/REFUTES/NEI align 1:1 with
       // the MoaSource label union signalFromLabel expects.
       const signal = signalFromLabel(best.moaLabel);
+      // NEI stays at confidence 0 BY DESIGN (fixes 1 & 6). signalFromLabel("NEI") === "insufficient",
+      // which the aggregator EXCLUDES from the vote mass (VOTES = supports|refutes|mixed): an NEI
+      // contribution never adds to supports/refutes and never consumes a directional vote slot, so
+      // a non-zero NEI confidence would be inert-yet-misleading in the deterministic mix. We keep
+      // it 0 so an honest "couldn't decide" reads as a true neutral. The raw model score for the
+      // NEI judgement is preserved for consumers in detail.bestRawScore and detail.labels[].
       const confidence = best.moaLabel === "NEI" ? 0 : best.weightedConfidence;
 
       // groundedSpans is the winning label's grounded span (verbatim engine substring), if any.
@@ -217,10 +268,17 @@ const agent: MoaAgent = {
       const refutesCount = sourceLabels.filter((l) => l.label === "REFUTES").length;
       const neiCount = sourceLabels.filter((l) => l.label === "NEI").length;
 
+      // How many of the on-topic sources we actually got a verdict for (fix 4 transparency).
+      const evaluatedCount = evaluated.length;
+      const failedNote =
+        failedSourceIds.length > 0
+          ? ` (${evaluatedCount}/${usableSources.length} sources verified; ${failedSourceIds.length} could not be evaluated)`
+          : "";
+
       const summary =
         best.moaLabel === "NEI"
-          ? `No groundable presence/absence evidence across ${usableSources.length} on-topic source(s).`
-          : `${best.result.polarity} claim: strongest source asserts ${best.result.source_assertion} of the effect -> ${best.moaLabel} (conf ${confidence.toFixed(2)}).`;
+          ? `No groundable presence/absence evidence across ${evaluatedCount} on-topic source(s)${failedNote}.`
+          : `${best.result.polarity} claim: strongest source asserts ${best.result.source_assertion} of the effect -> ${best.moaLabel} (conf ${confidence.toFixed(2)})${failedNote}.`;
 
       return makeContribution(AGENT_ID, {
         ran: true,
@@ -236,16 +294,27 @@ const agent: MoaAgent = {
           bestRawScore: Number(best.result.score.toFixed(4)),
           bestQualityWeight: Number(best.qualityWeight.toFixed(4)),
           groundingDropped: best.result.grounding_dropped,
+          bestRawConfidence: Number(best.rawConfidence.toFixed(4)),
           sourcesChecked: usableSources.length,
+          sourcesEvaluated: evaluatedCount,
+          failedSourceIds,
           droppedOffTopic: droppedIds.size,
           consumedRelevance: relevance !== undefined,
           consumedQuality: quality !== undefined,
           labelCounts: { supports: supportsCount, refutes: refutesCount, nei: neiCount },
-          labels: sourceLabels.map((l) => ({
-            sourceId: l.sourceId,
-            label: l.label,
-            confidence: Number(l.confidence.toFixed(4)),
-            grounded: l.span !== null,
+          // Per-source diagnostics. We surface rawConfidence (un-down-weighted engine score) and
+          // qualityWeight ALONGSIDE the weighted confidence (fix 3) so a downstream verifier can
+          // see WHY a "best" label was ranked where it was — e.g. a high-raw REFUTES that quality
+          // weighting pushed below a lower-raw SUPPORTS — and re-weight itself if it disagrees.
+          // NOTE: the public source_labels artifact keeps its stable shape; this richer view lives
+          // only in detail, so no consumer's SourceLabel contract changes.
+          labels: evaluated.map((e) => ({
+            sourceId: e.source.id,
+            label: e.moaLabel,
+            confidence: Number(e.weightedConfidence.toFixed(4)),
+            rawConfidence: Number(e.rawConfidence.toFixed(4)),
+            qualityWeight: Number(e.qualityWeight.toFixed(4)),
+            grounded: e.span !== null,
           })),
         },
         groundedSpans,

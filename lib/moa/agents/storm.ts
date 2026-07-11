@@ -137,14 +137,49 @@ function signalFromStance(stance: DebateStance): AgentSignal {
   }
 }
 
+// Fixed calibration constants for the deterministic confidence read. Documented so the
+// numeric path stays auditable and reproducible (no LLM ever touches these).
+//   - BALANCE_SATURATION: evidence count at which a perfectly balanced debate earns the
+//     full balance credit (a well-researched 10v10+ tie is more credible than a 1v1 tie).
+//   - BALANCE_CREDIT: how much confidence a fully-saturated balanced debate gains over the
+//     0.5 floor, so a 100v100 tie reads ~0.7 while a 1v1 tie stays at 0.5.
+//   - DROP_PENALTY: maximum share of confidence removed when ALL originally-labeled evidence
+//     failed to ground — a 1v1 debate that started 2v1 must not read as clean as a native 1v1.
+const BALANCE_SATURATION = 10;
+const BALANCE_CREDIT = 0.2;
+const DROP_PENALTY = 0.3;
+
 // Confidence from the grounded margin: a wider lead between the two sides is a stronger read.
-// Deterministic — derived only from buildDebate's grounded counts, never from Claude.
-function confidenceFromMargin(supportingCount: number, refutingCount: number): number {
+// Deterministic — derived ONLY from buildDebate's grounded counts and the count of evidence
+// that failed to ground, never from Claude. Two calibrations beyond raw margin:
+//   1. GROUNDING-LOSS DAMPENING (fix): when sources were dropped during grounding, the debate
+//      rests on less evidence than it started with, so we dampen by the share that was lost.
+//      A 1v1 tie that began as a 2v1 split (one source ungroundable) must read as LESS certain
+//      than a debate whose every labeled source grounded cleanly.
+//   2. BALANCE DENSITY (fix): a perfectly balanced debate scores 0.5 at the margin, but a
+//      100v100 tie is a far better-researched "mixed" than a 1v1 tie. We add credit for total
+//      grounded evidence in the balanced case, saturating at BALANCE_SATURATION, so dense ties
+//      read higher (~0.7) while sparse ties stay at the honest 0.5 floor.
+function confidenceFromMargin(
+  supportingCount: number,
+  refutingCount: number,
+  droppedUngrounded: number
+): number {
   const total = supportingCount + refutingCount;
   if (total === 0) return 0;
   const margin = Math.abs(supportingCount - refutingCount);
-  // Perfectly balanced => 0.5 floor of an honest mixed read; one side dominant => up to 1.
-  return clamp01(0.5 + 0.5 * (margin / total));
+
+  // Balance density: only the perfectly-balanced case is undervalued by the raw margin, so
+  // only it earns the density credit; any lopsided debate already gets margin credit.
+  const balanceFactor = margin === 0 ? Math.min(1, total / BALANCE_SATURATION) : 0;
+  const base = 0.5 + 0.5 * (margin / total) + balanceFactor * BALANCE_CREDIT;
+
+  // Grounding-loss dampening: share of the originally-labeled evidence that failed to ground.
+  const originalTotal = total + droppedUngrounded;
+  const lossShare = originalTotal === 0 ? 0 : droppedUngrounded / originalTotal;
+  const dampening = 1 - lossShare * DROP_PENALTY;
+
+  return clamp01(base * dampening);
 }
 
 // Surface buildDebate's already-grounded quotes as verbatim spans. buildDebate guarantees each
@@ -209,9 +244,20 @@ const agent: MoaAgent = {
 
       const { supporting, refuting } = splitSides(ctx.sources, labelById, contestedIds);
 
-      // Honest skip: a debate requires BOTH a supporting and a refuting side.
+      // Honest skip (COMPOSITION, pre-grounding): the upstream labels never produced two
+      // opposable sides. Name which side is missing so the trace shows why the debate could
+      // not even be composed (distinct from a post-grounding loss below).
       if (supporting.length === 0 || refuting.length === 0) {
-        return skippedContribution(AGENT_ID, "no two grounded sides to debate");
+        const missing =
+          supporting.length === 0 && refuting.length === 0
+            ? "no SUPPORTS or REFUTES labeled sources"
+            : supporting.length === 0
+              ? "no SUPPORTS-labeled source"
+              : "no REFUTES-labeled source";
+        return skippedContribution(
+          AGENT_ID,
+          `No two labeled sides to debate: ${missing} from the upstream labels.`
+        );
       }
 
       // Claude writes ONLY the connective prose, and ONLY when the orchestrator allows it. The
@@ -223,14 +269,30 @@ const agent: MoaAgent = {
 
       const { synthesis, bestCaseFor, critique } = debate.sections;
 
-      // buildDebate grounds every side; if grounding dropped either side to empty there is no
-      // two-sided debate to report — skip honestly rather than vote on ungroundable evidence.
+      // Honest skip (GROUNDING, post-grounding): the sides WERE labeled and composed, but a
+      // side lost all of its evidence when buildDebate grounded every quote against the real
+      // source text. Name which side collapsed so this is not conflated with the composition
+      // skip above — and never vote on evidence that could not be grounded.
       if (debate.supportingCount === 0 || debate.refutingCount === 0) {
-        return skippedContribution(AGENT_ID, "no two grounded sides to debate");
+        const collapsed =
+          debate.supportingCount === 0 && debate.refutingCount === 0
+            ? "both sides lost all grounded evidence"
+            : debate.supportingCount === 0
+              ? "supporting side lost all grounded evidence"
+              : "refuting side lost all grounded evidence";
+        return skippedContribution(
+          AGENT_ID,
+          `No two grounded sides to debate: ${collapsed} during grounding ` +
+            `(${debate.droppedUngrounded} quote(s) dropped as ungroundable).`
+        );
       }
 
       const signal = signalFromStance(synthesis.stance);
-      const confidence = confidenceFromMargin(debate.supportingCount, debate.refutingCount);
+      const confidence = confidenceFromMargin(
+        debate.supportingCount,
+        debate.refutingCount,
+        debate.droppedUngrounded
+      );
 
       const groundedSpans: GroundedSpan[] = [
         ...toGroundedSpans(bestCaseFor.quotes),

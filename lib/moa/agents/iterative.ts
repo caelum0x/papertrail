@@ -24,9 +24,12 @@
 // the DOCUMENTED fraction of the four sufficiency criteria that pass.
 //
 // MOAT preserved: the whole path is DETERMINISTIC — same sources + same effect_sizes in, same
-// criteria out. NO LLM: usedClaude is always false. Heterogeneity and open-contradiction
-// counts are unknown to a plain claim+sources context, so they are honestly passed as
-// null/0 (which fail their criteria) rather than fabricated. No I/O, no DB pool.
+// criteria out. NO LLM: usedClaude is always false. The open-contradiction count is DERIVED
+// from the consumed effect_sizes directions (a benefit-vs-harm split across the parsed ratio
+// effects — the same deterministic rule autoloop uses), so a genuinely contested body fails
+// the "contradictions resolved" criterion instead of being forced to 0. Heterogeneity (I²)
+// is not knowable from a plain claim+sources+effects context, so it is honestly left null
+// (which fails its criterion) rather than fabricated. No I/O, no DB pool.
 
 import type {
   MoaAgent,
@@ -135,6 +138,44 @@ function sourcesWithEffects(effects: readonly ParsedEffectSize[]): number {
   return ids.size;
 }
 
+// The null value shared by every ratio measure: ratio == 1 <=> no effect. A pooled body with
+// some ratios below 1 (benefit) and some above 1 (harm) is an OPEN CONTRADICTION that the raw
+// study count cannot see — surfaced here from the consumed effect directions. Mirror of
+// autoloop.ts (openContradictionsFrom) so both deliberation agents read contradictions the
+// same deterministic way.
+const NULL_RATIO = 1;
+
+// A directional disagreement across the consumed effects counts as ONE open contradiction for
+// the sufficiency gate — enough to fail the "contradictions resolved" criterion. We never
+// fabricate a larger count than the evidence supports: it is 0 (no disagreement) or 1 (at
+// least one benefit AND one harm effect).
+const CONTRADICTION_PRESENT = 1;
+const NO_CONTRADICTION = 0;
+
+// Count how many consumed effects point each way relative to the null of 1. Point estimates
+// exactly at the null (ratio == 1, no effect) are neither, so they are ignored. Deterministic.
+function countDirections(effects: readonly ParsedEffectSize[]): {
+  benefit: number;
+  harm: number;
+} {
+  let benefit = 0;
+  let harm = 0;
+  for (const e of effects) {
+    if (e.point < NULL_RATIO) benefit += 1;
+    else if (e.point > NULL_RATIO) harm += 1;
+  }
+  return { benefit, harm };
+}
+
+// An open contradiction exists when the consumed effects disagree in direction — at least one
+// beneficial (ratio < 1) AND at least one harmful (ratio > 1) effect in the same body. When the
+// effect_sizes artifact is absent/empty we honestly report 0 (no basis to assert a conflict).
+function openContradictionsFrom(effects: readonly ParsedEffectSize[]): number {
+  if (effects.length === 0) return NO_CONTRADICTION;
+  const { benefit, harm } = countDirections(effects);
+  return benefit > 0 && harm > 0 ? CONTRADICTION_PRESENT : NO_CONTRADICTION;
+}
+
 // The pooled-study proxy `k`: the number of DISTINCT sources that are quantitative-ready —
 // i.e. carry usable text OR were shown by the upstream extractor to report a parsed effect
 // size. Taking the union means the effect_sizes artifact can only ever RAISE k (never lower
@@ -156,8 +197,9 @@ function pooledStudyProxy(
 
 // Build ONE deterministic round from the context + consumed effect_sizes. `k` is the union
 // of text-bearing sources and effect-bearing sources; `participants` is the sum of parsed
-// enrollment counts across all sources; heterogeneity and open-contradiction counts are
-// unknown to this context, so they are honestly left unknown (iSquared null) / zero.
+// enrollment counts across all sources; `openContradictions` is derived from the consumed
+// effect directions (a benefit-vs-harm split); heterogeneity (I²) is not knowable from this
+// context, so it is honestly left null (which fails its criterion) rather than invented.
 function buildRound(
   sources: readonly MoaSource[],
   effects: readonly ParsedEffectSize[]
@@ -171,7 +213,7 @@ function buildRound(
     k,
     participants,
     iSquared: null,
-    openContradictions: 0,
+    openContradictions: openContradictionsFrom(effects),
   };
 }
 
@@ -231,6 +273,9 @@ const agent: MoaAgent = {
       // the count of distinct effect-bearing sources strengthens the study-count signal.
       const effects = bb.get("effect_sizes") ?? [];
       const effectSourceCount = sourcesWithEffects(effects);
+      // Direction split across the consumed effects — the basis for the derived open
+      // contradiction that feeds the "contradictions resolved" criterion below.
+      const { benefit, harm } = countDirections(effects);
 
       const round = buildRound(ctx.sources, effects);
 
@@ -282,6 +327,7 @@ const agent: MoaAgent = {
           },
           consumedEffectSizes: effects.length,
           effectBearingSources: effectSourceCount,
+          effectDirections: { benefit, harm },
           textBearingSources: usableSourceCount(ctx.sources),
           producerOfEffectSizes: bb.producerOf("effect_sizes") ?? null,
           stopReason: plan.final.stopReason,

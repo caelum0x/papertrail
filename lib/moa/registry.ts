@@ -14,6 +14,7 @@ import indra from "./agents/indra";
 import r2r from "./agents/r2r";
 // Layer 2 · verifiers (consume + vote)
 import minicheck from "./agents/minicheck";
+import discrepancy from "./agents/discrepancy";
 import multivers from "./agents/multivers";
 import pymare from "./agents/pymare";
 import magnitude from "./agents/magnitude";
@@ -40,6 +41,7 @@ export const AGENTS: readonly MoaAgent[] = [
   indra,
   r2r,
   minicheck,
+  discrepancy,
   multivers,
   pymare,
   magnitude,

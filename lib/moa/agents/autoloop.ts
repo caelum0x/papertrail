@@ -17,9 +17,12 @@
 // training, NO GPU, NO network — only evidence logic.
 //
 // It VOTES neutral when the loop is stop-worthy (the accrued evidence is adequate to conclude and
-// no further refinement is warranted) and `insufficient` when the loop says "need more evidence"
-// (the refinement machine still wants another bounded pass). It never votes supports/refutes —
-// autoloop weighs whether we have ENOUGH to conclude and what to do next, not the direction.
+// no further refinement is warranted) and `mixed` when the loop says "need more evidence" (the
+// refinement machine still wants another bounded pass; the body is not settled). It never votes
+// supports/refutes — autoloop weighs whether we have ENOUGH to conclude, not the direction. The
+// `mixed` (rather than `insufficient`) vote is deliberate: only VOTES = {supports, refutes, mixed}
+// are tallied by the aggregator, so a `mixed` vote actually DILUTES an over-confident high-
+// agreement verdict, whereas `insufficient` would be silently ignored (see signalFromLoop, FIX 1).
 //
 // PRODUCES: [] — a terminal deliberation voter; it writes no artifact.
 // CONSUMES: ["sufficiency", "effect_sizes"] — the scheduler orders autoloop AFTER the sufficiency
@@ -101,6 +104,73 @@ function openContradictionsFrom(effects: readonly ParsedEffectSize[]): number {
   return benefit > 0 && harm > 0 ? CONTRADICTION_PRESENT : NO_CONTRADICTION;
 }
 
+// FIX 3 + FIX 4 (additive detail, non-gating): the loop's openContradictions is deliberately
+// a binary 0/1 gate signal (present/absent) — that is the deterministic criterion the field-
+// standard sufficiency gate consumes and MUST stay stable. But a raw 0/1 loses the SEVERITY of
+// disagreement (Fix 3: a 5-vs-5 split reads the same as 1-vs-1) and its DILUTION by null-effect
+// saturation (Fix 4: a 1-vs-1 split inside 100 null effects is a far weaker signal than inside 2).
+// We expose both as pure, deterministic diagnostics on `detail` so upstream/UI can judge how
+// contested the body really is — WITHOUT altering the binary gate feeding the loop or any vote.
+interface ContradictionSeverity {
+  // How many effects point each way relative to the null of 1.
+  benefit: number;
+  harm: number;
+  // Effects with a non-null direction (benefit + harm); the rest sit exactly at ratio == 1.
+  directional: number;
+  // directional / total effects: what fraction of the body carries ANY directional signal.
+  // Low saturation => a directional split is a weak, easily-over-read contradiction.
+  saturation: number;
+  // harm / directional: 0 = all benefit, 1 = all harm, 0.5 = an evenly contested split.
+  // Undefined direction (no directional effects) collapses to 0 by construction.
+  disagreementRatio: number;
+  // A balance-and-saturation-weighted severity in [0,1]: peaks at an evenly-split, fully-
+  // directional body and decays toward 0 as one side dominates OR null effects saturate the pool.
+  // Diagnostic only — it moves nothing in the numeric/verdict path.
+  weightedSeverity: number;
+}
+
+function contradictionSeverityFrom(
+  effects: readonly ParsedEffectSize[]
+): ContradictionSeverity {
+  const { benefit, harm } = countDirections(effects);
+  const directional = benefit + harm;
+  const total = effects.length;
+  const saturation = total > 0 ? directional / total : 0;
+  const disagreementRatio = directional > 0 ? harm / directional : 0;
+  // Balance term (Fix 4 option B shape): 1 when perfectly split, -> 0 as one side dominates.
+  const balance =
+    directional > 0 ? 1 - Math.abs(benefit - harm) / directional : 0;
+  const contested = benefit > 0 && harm > 0 ? 1 : 0;
+  const weightedSeverity = clamp01(contested * balance * saturation);
+  return {
+    benefit,
+    harm,
+    directional,
+    saturation: round4(saturation),
+    disagreementRatio: round4(disagreementRatio),
+    weightedSeverity: round4(weightedSeverity),
+  };
+}
+
+function round4(n: number): number {
+  return Math.round(n * 1e4) / 1e4;
+}
+
+// FIX 2: a fractional sufficiency.k (an intentional weighted count like 2.9) was silently
+// FLOORED by Math.trunc — turning 2.9 into 2, failing enoughStudies (2 < 3), and over-pessimising
+// the loop into voting insufficient. We now Math.round to the NEAREST integer (2.9 -> 3, 2.4 ->
+// 2), which respects a weighted count without inventing evidence, and we surface a truncationNote
+// whenever the integerised value differs from the raw input so downstream sees the discrepancy
+// between detail.round.k and detail.consumedSufficiency.k rather than a silent mismatch.
+function integerise(raw: number): number {
+  return Math.max(0, Math.round(raw));
+}
+
+function roundingNote(rawK: number, roundedK: number): string | null {
+  if (rawK === roundedK) return null;
+  return `studies count rounded from ${rawK} to ${roundedK} (nearest integer) for the sufficiency gate`;
+}
+
 // Build the single accrued RoundStats the refinement loop evaluates, COMPOSING both consumed
 // artifacts: k + participants come from the sufficiency assessor's finding; openContradictions
 // is derived from the effect-size directions. Heterogeneity (I²) is not knowable from these two
@@ -110,18 +180,28 @@ function buildRound(
   effects: readonly ParsedEffectSize[]
 ): RoundStats {
   return {
-    k: Math.max(0, Math.trunc(sufficiency.k)),
-    participants: Math.max(0, Math.trunc(sufficiency.participants)),
+    k: integerise(sufficiency.k),
+    participants: integerise(sufficiency.participants),
     iSquared: null,
     openContradictions: openContradictionsFrom(effects),
   };
 }
 
-// The refinement loop's stop decision maps onto a WEIGHTING signal, never a direction:
-//   stop-worthy & sufficient -> neutral      (enough to conclude; no more refinement needed)
-//   not stop-worthy          -> insufficient (the loop still wants another bounded pass)
+// FIX 1 [wrong_verdict]: the aggregator only tallies VOTES = {supports, refutes, mixed}
+// (aggregate.ts:50,110). `insufficient` is NOT a counted vote, so an AutoLoop `insufficient`
+// signal was invisible to the verdict — letting the mixture return "supported" at high trust
+// even when this agent had explicitly judged the body of evidence inadequate to conclude. The
+// architectural veto (Option A: make aggregate downweight on `insufficient`) lives in a DIFFERENT
+// file we must not touch and would alter the public mix, so we take the moat-safe Option B: when
+// the loop is NOT stop-worthy, cast the COUNTED `mixed` vote. `mixed` is deliberation's honest
+// "the evidence is not settled" signal — it dilutes an otherwise high-agreement tally (raising the
+// contest/mixed ratios in aggregate.ts) instead of silently abstaining. This changes NO numeric
+// path (aggregate math is untouched; the vote is just now visible) and keeps usedClaude false.
+//
+//   stop-worthy & sufficient -> neutral (enough to conclude; abstain, no refinement needed)
+//   not stop-worthy          -> mixed   (evidence inadequate/unsettled; dilute the verdict)
 function signalFromLoop(sufficient: boolean): AgentSignal {
-  return sufficient ? "neutral" : "insufficient";
+  return sufficient ? "neutral" : "mixed";
 }
 
 // There are exactly four sufficiency criteria; a fully-adequate body passes all four.
@@ -244,6 +324,17 @@ const agent: MoaAgent = {
       const confidence = clamp01(passed / CRITERIA_COUNT);
 
       const { benefit, harm } = countDirections(effects);
+
+      // FIX 3 + FIX 4 diagnostics: severity + saturation of any directional disagreement.
+      const contradictionSeverity = contradictionSeverityFrom(effects);
+
+      // FIX 2 diagnostics: surface any rounding the sufficiency gate applied to k / participants
+      // so detail.round.* and detail.consumedSufficiency.* discrepancies are explained, not silent.
+      const truncationNotes = [
+        roundingNote(sufficiency.k, round.k),
+        roundingNote(sufficiency.participants, round.participants),
+      ].filter((note): note is string => note !== null);
+
       const summary = stop
         ? `AutoLoop: evidence is stop-worthy — all sufficiency criteria met across ${round.k} pooled ${round.k === 1 ? "study" : "studies"}, ${round.participants} participants; no further refinement proposed.`
         : `AutoLoop: needs more evidence — ${passed}/${CRITERIA_COUNT} criteria met; next refinement step "${proposedNextStep?.type ?? "raise_limit"}".`;
@@ -279,6 +370,12 @@ const agent: MoaAgent = {
           },
           consumedEffectCount: effects.length,
           effectDirections: { benefit, harm },
+          // FIX 3 + FIX 4: severity + null-effect-saturation of the directional disagreement,
+          // exposed for upstream/UI WITHOUT changing the binary openContradictions gate above.
+          contradictionSeverity,
+          // FIX 2: any nearest-integer rounding the sufficiency gate applied to k / participants.
+          // Empty when round.* exactly matches consumedSufficiency.* (no rounding occurred).
+          truncationNotes,
           sufficiencyProducer: bb.producerOf("sufficiency") ?? null,
           effectSizesProducer: bb.producerOf("effect_sizes") ?? null,
         },

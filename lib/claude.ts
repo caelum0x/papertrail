@@ -95,17 +95,32 @@ export async function callClaudeForJson<T>(params: {
   const anthropic = getClaude();
 
   const call = async (system: string, user: string): Promise<unknown | undefined> => {
-    const response = await anthropic.messages.create({
-      model: CLAUDE_MODEL,
-      max_tokens: params.maxTokens ?? 1024,
-      system,
-      messages: [{ role: "user", content: user }],
-    });
-    const textBlock = response.content.find((b) => b.type === "text");
-    if (!textBlock || textBlock.type !== "text") {
-      throw new Error("Claude response contained no text block");
+    // Retry transient Anthropic errors (429 rate_limit, 529 overloaded, 503) with exponential
+    // backoff so a rate-limit blip degrades latency, not correctness. Non-transient errors and
+    // the final attempt propagate. Deterministic backoff (no jitter) keeps behavior reproducible.
+    let delayMs = 1000;
+    const maxRetries = 5;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const response = await anthropic.messages.create({
+          model: CLAUDE_MODEL,
+          max_tokens: params.maxTokens ?? 1024,
+          system,
+          messages: [{ role: "user", content: user }],
+        });
+        const textBlock = response.content.find((b) => b.type === "text");
+        if (!textBlock || textBlock.type !== "text") {
+          throw new Error("Claude response contained no text block");
+        }
+        return parseJsonLoose(textBlock.text);
+      } catch (err: unknown) {
+        const status = (err as { status?: number })?.status;
+        const transient = status === 429 || status === 529 || status === 503;
+        if (!transient || attempt >= maxRetries) throw err;
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        delayMs *= 2;
+      }
     }
-    return parseJsonLoose(textBlock.text);
   };
 
   // First attempt with the caller's prompt (prose-tolerant parse).

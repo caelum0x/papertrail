@@ -283,7 +283,20 @@ function overlapScore(mention: string, alias: string): number {
   // extra mention tokens so "diabetes" vs "type 2 diabetes" scores below an exact hit.
   const aliasCoverage = hits / aTokens.size;
   const mentionPrecision = hits / mTokens.length;
-  return Math.min(aliasCoverage, mentionPrecision);
+  const base = Math.min(aliasCoverage, mentionPrecision);
+  // Fix 1 (medium/calibration): penalize a mention that is NARROWER than the concept it
+  // would link to. The token-containment base rewards a mention whose every token appears
+  // in a longer alias — e.g. "type 2 diabetes" clears the threshold against an alias that
+  // also carries "mellitus", even though the mention DROPPED that modifier. In medical
+  // linking a narrower mention denotes a narrower concept; silently promoting it to the
+  // broader concept is a distortion. When the alias has strictly more tokens than the
+  // mention, scale the score by the mention/alias token-length ratio, so fuzzy links must
+  // be close in size to survive LINK_THRESHOLD; equal- or shorter-length aliases are
+  // unaffected. Deterministic string math only — no LLM, no verdict-path change.
+  if (aTokens.size > mTokens.length) {
+    return base * (mTokens.length / aTokens.size);
+  }
+  return base;
 }
 
 export function linkMention(mentionText: string, type: EntityType): EntityLink {
@@ -499,8 +512,26 @@ export async function recognizeEntities(
     abbrevByShort.set(a.short.trim().toLowerCase(), a.long);
   }
 
-  // 1. NER — Claude proposes candidate mentions (honest-empty on LLM failure).
-  const mentions = await deps.extractMentions(text).catch(() => [] as RawMention[]);
+  // 1. NER — Claude proposes candidate mentions.
+  //
+  // Fix 2 (medium/robustness): distinguish "extraction FAILED" from "extraction succeeded
+  // but found no mentions". The former is an observability event the AGENT layer must see;
+  // the latter is an honest empty result. The previous `.catch(() => [])` collapsed both
+  // into an empty NerResult, so an extractMentions failure was invisible to the scispaCy
+  // agent's trace (its try/catch never fired) and to indra. We keep the public NerResult
+  // SHAPE unchanged (it is Zod-locked and consumed positionally by scispacy/indra/ingest —
+  // adding an `extractionFailed` flag would break that contract), so the safest variant
+  // that achieves the intent is to let a LABELED error bubble: scispacy.ts wraps this call
+  // in a try/catch and emits erroredContribution() (surfacing the error in the MoA trace),
+  // and ingest/entityCanonicalization.ts guards its own boundary with a .catch honest-empty.
+  // A genuine no-mentions result still degrades honestly to `empty` below — no throw.
+  let mentions: RawMention[];
+  try {
+    mentions = await deps.extractMentions(text);
+  } catch (err: unknown) {
+    const reason = err instanceof Error ? err.message : "unknown error";
+    throw new Error(`NER extraction failed: ${reason}`);
+  }
   if (mentions.length === 0) return empty;
 
   // 2. Ground each mention; drop the ungroundable. 3. Link the survivors.
