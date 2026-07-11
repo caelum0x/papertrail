@@ -106,6 +106,13 @@ interface SourceDraft {
   text: string;
 }
 
+interface SourceUsed {
+  id: string;
+  title: string | null;
+  source_type: string;
+  url: string | null;
+}
+
 export default function OrchestratorPage() {
   const [claim, setClaim] = useState(SAMPLE_CLAIM);
   const [sources, setSources] = useState<SourceDraft[]>([{ id: "s1", text: SAMPLE_SOURCE }]);
@@ -113,6 +120,10 @@ export default function OrchestratorPage() {
   const [result, setResult] = useState<MoaResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // "manual" = paste sources; "auto" = retrieve cached sources from the claim server-side.
+  const [mode, setMode] = useState<"manual" | "auto">("manual");
+  const [sourcesUsed, setSourcesUsed] = useState<SourceUsed[]>([]);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const updateSource = useCallback((idx: number, text: string) => {
     setSources((prev) => prev.map((s, i) => (i === idx ? { ...s, text } : s)));
@@ -128,7 +139,31 @@ export default function OrchestratorPage() {
     setLoading(true);
     setError(null);
     setResult(null);
+    setNotice(null);
+    setSourcesUsed([]);
     try {
+      if (mode === "auto") {
+        // Server-side: retrieve cached sources for the claim, then run the mixture.
+        const res = await fetch("/api/moa/verify-claim", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ claim, options: { llm } }),
+        });
+        const body = await res.json().catch(() => null);
+        if (!res.ok || !body?.success) {
+          setError(body?.error ?? "Request failed.");
+          return;
+        }
+        const data = body.data as { result: MoaResult | null; sourcesUsed: SourceUsed[]; message?: string };
+        setSourcesUsed(data.sourcesUsed ?? []);
+        if (!data.result) {
+          setNotice(data.message ?? "No cached sources matched this claim.");
+          return;
+        }
+        setResult(data.result);
+        return;
+      }
+
       const cleanSources = sources.filter((s) => s.text.trim().length > 0).map((s) => ({ id: s.id, text: s.text }));
       if (cleanSources.length === 0) {
         setError("Add at least one source with text.");
@@ -150,7 +185,7 @@ export default function OrchestratorPage() {
     } finally {
       setLoading(false);
     }
-  }, [claim, sources, llm]);
+  }, [claim, sources, llm, mode]);
 
   const verdict = result ? VERDICT_STYLES[result.aggregate.verdict] : null;
   const byId = new Map((result?.agents ?? []).map((a) => [a.agentId, a]));
@@ -170,20 +205,40 @@ export default function OrchestratorPage() {
       </header>
 
       <section className="rounded-xl border border-ink/15 bg-white p-5">
-        <label className="text-sm font-medium text-ink/70">Claim</label>
+        <div className="mb-3 inline-flex rounded-lg border border-ink/15 p-0.5 text-xs">
+          <button
+            onClick={() => setMode("auto")}
+            className={`rounded-md px-3 py-1 ${mode === "auto" ? "bg-accent text-white" : "text-ink/60"}`}
+          >
+            Retrieve from claim
+          </button>
+          <button
+            onClick={() => setMode("manual")}
+            className={`rounded-md px-3 py-1 ${mode === "manual" ? "bg-accent text-white" : "text-ink/60"}`}
+          >
+            Paste sources
+          </button>
+        </div>
+        <label className="block text-sm font-medium text-ink/70">Claim</label>
         <textarea
           value={claim}
           onChange={(e) => setClaim(e.target.value)}
           rows={2}
           className="mt-2 w-full rounded-lg border border-ink/15 p-3 text-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
         />
-        <div className="mt-4 flex items-center justify-between">
+        {mode === "auto" ? (
+          <p className="mt-2 text-xs text-ink/45">
+            Cached PubMed / ClinicalTrials.gov sources are retrieved for this claim server-side (their
+            text never leaves the server), then run through the mixture of agents.
+          </p>
+        ) : null}
+        <div className={`mt-4 flex items-center justify-between ${mode === "auto" ? "hidden" : ""}`}>
           <label className="text-sm font-medium text-ink/70">Sources</label>
           <button onClick={addSource} className="text-xs text-accent hover:underline">
             + Add source
           </button>
         </div>
-        <div className="mt-2 space-y-2">
+        <div className={`mt-2 space-y-2 ${mode === "auto" ? "hidden" : ""}`}>
           {sources.map((s, i) => (
             <div key={i} className="rounded-lg border border-ink/10 p-2">
               <div className="mb-1 flex items-center justify-between">
@@ -207,10 +262,16 @@ export default function OrchestratorPage() {
         <div className="mt-4 flex items-center gap-4">
           <button
             onClick={run}
-            disabled={loading || claim.trim().length < 3}
+            disabled={loading || claim.trim().length < (mode === "auto" ? 10 : 3)}
             className="rounded-lg bg-accent px-5 py-2 text-sm font-medium text-white disabled:opacity-40"
           >
-            {loading ? "Composing agents…" : "Run mixture of agents"}
+            {loading
+              ? mode === "auto"
+                ? "Retrieving & composing…"
+                : "Composing agents…"
+              : mode === "auto"
+                ? "Retrieve & run mixture"
+                : "Run mixture of agents"}
           </button>
           <label className="flex items-center gap-2 text-xs text-ink/50">
             <input type="checkbox" checked={llm} onChange={(e) => setLlm(e.target.checked)} />
@@ -218,6 +279,22 @@ export default function OrchestratorPage() {
           </label>
         </div>
         {error ? <p className="mt-3 text-sm text-accent">{error}</p> : null}
+        {notice ? <p className="mt-3 text-sm text-ink/50">{notice}</p> : null}
+        {sourcesUsed.length > 0 ? (
+          <div className="mt-3 rounded-lg border border-ink/10 bg-ink/5 p-3">
+            <div className="text-xs font-medium text-ink/50">
+              Retrieved {sourcesUsed.length} cached source{sourcesUsed.length === 1 ? "" : "s"}
+            </div>
+            <ul className="mt-1.5 space-y-1">
+              {sourcesUsed.map((s) => (
+                <li key={s.id} className="flex items-baseline gap-2 text-xs text-ink/60">
+                  <span className="rounded bg-white px-1 py-0.5 text-[10px] text-ink/40">{s.source_type}</span>
+                  <span className="truncate">{s.title ?? s.id}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </section>
 
       {result ? (
