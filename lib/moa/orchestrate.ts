@@ -95,6 +95,7 @@ export async function orchestrate(
       name: agent?.name ?? c.agentId,
       category: agent?.category ?? "sources",
       gate: gateById.get(c.agentId) ?? 0,
+      authority: agent?.authority ?? 1,
       contribution: c,
     };
   });

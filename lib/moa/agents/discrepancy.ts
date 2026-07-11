@@ -63,6 +63,11 @@ const agent: MoaAgent = {
     "PaperTrail's flagship primary-source verifier: extracts the source finding, audits the " +
     "claim against it for magnitude/population/caveat distortions, grounds every flagged span, " +
     "and applies the deterministic reconcile. The single most authoritative vote in the mixture.",
+  // The authoritative verifier: it alone reproduces the full PaperTrail path (~95% single-source),
+  // so it must DOMINATE the mix rather than be diluted to one equal vote among weaker enrichers.
+  // 3.0 lets a confident audit outweigh a crowd of dissenting low-weight agents while still being
+  // moveable by strong cross-source consensus (MultiVerS/PyMARE) on multi-source claims.
+  authority: 3.0,
 
   produces: [] as const,
   consumes: ["relevance"] as const,

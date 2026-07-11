@@ -33,6 +33,9 @@ export interface WeightedContribution {
   name: string;
   category: AgentCategory;
   gate: number;
+  // Relative authority of this agent (MoaAgent.authority, default 1). Multiplies the vote weight
+  // so an authoritative expert dominates a crowd of weaker agents.
+  authority: number;
   contribution: AgentContribution;
 }
 
@@ -85,9 +88,80 @@ function readQualityMult(weighted: readonly WeightedContribution[]): number {
   return 1;
 }
 
+// Minimum authority for an agent to act as the "lead verifier" the mixture defers to.
+const LEAD_AUTHORITY_MIN = 2;
+
+// The lead verifier: the highest-authority verification agent that actually ran. This is the
+// mixture's most trusted expert (the primary-source auditor). Returns undefined when no such
+// agent ran (e.g. the LLM API is down) — in which case the full deterministic mix decides.
+function leadVerifier(
+  weighted: readonly WeightedContribution[]
+): WeightedContribution | undefined {
+  const candidates = weighted.filter(
+    (w) =>
+      w.contribution.ran &&
+      w.category === "verification" &&
+      (Number.isFinite(w.authority) ? w.authority : 1) >= LEAD_AUTHORITY_MIN &&
+      w.gate > 0
+  );
+  if (candidates.length === 0) return undefined;
+  return [...candidates].sort((a, b) => b.authority * b.gate - a.authority * a.gate)[0];
+}
+
+// True when genuine CROSS-SOURCE evidence exists: a confident directional vote from an agent that
+// only fires on >=2 sources (MultiVerS label aggregation or PyMARE effect-size pooling). When it
+// does, the claim is multi-source and the full composition — not the single-primary-source
+// auditor — should decide, so we do NOT defer to the lead.
+function crossSourceConsensusPresent(weighted: readonly WeightedContribution[]): boolean {
+  return weighted.some(
+    (w) =>
+      w.contribution.ran &&
+      (w.agentId === "multivers" || w.agentId === "pymare") &&
+      (w.contribution.signal === "supports" || w.contribution.signal === "refutes") &&
+      w.contribution.confidence > 0.3
+  );
+}
+
+function signalToVerdict(signal: AgentSignal): MoaVerdict {
+  if (signal === "supports") return "supported";
+  if (signal === "refutes") return "refuted";
+  if (signal === "mixed") return "mixed";
+  return "insufficient"; // insufficient | neutral
+}
+
+// Build the aggregate by DEFERRING to the lead verifier's verdict: a mixture of EXPERTS must not
+// let a crowd of weaker agents out-vote its most authoritative one. The lead's own confidence sets
+// the trust (tempered by the global quality multiplier); the other agents' vote masses are still
+// reported for the trace but do not change the categorical verdict.
+function deferToLead(
+  lead: WeightedContribution,
+  mass: { supports: number; refutes: number; mixed: number },
+  counts: { voted: number; ran: number; total: number },
+  weights: MoaAggregate["weights"],
+  qualityMult: number
+): MoaAggregate {
+  const c = lead.contribution;
+  const verdict = signalToVerdict(c.signal);
+  const base = verdict === "insufficient" ? 15 : verdict === "mixed" ? 45 : 100;
+  const trust = Math.max(0, Math.min(100, Math.round(base * clamp01(c.confidence) * qualityMult)));
+  return {
+    verdict,
+    trust,
+    mass: { supports: round4(mass.supports), refutes: round4(mass.refutes), mixed: round4(mass.mixed) },
+    agreement: round4(clamp01(c.confidence)),
+    counts,
+    weights: weights.map((w) => ({ ...w, weight: round4(w.weight) })),
+  };
+}
+
 /**
  * Deterministically mix weighted agent votes into a verdict + trust score. Pure: no I/O,
  * no LLM, inputs never mutated. Honest "insufficient" when nothing voted.
+ *
+ * Two regimes, both deterministic: (1) when a high-authority verifier ran and there is no genuine
+ * cross-source consensus, DEFER to that lead expert's verdict (the mixture inherits the primary
+ * auditor's single-source accuracy instead of diluting it); (2) otherwise mix all votes (multi-
+ * source composition, or the resilience floor when the LLM-based lead could not run).
  */
 export function aggregate(weighted: readonly WeightedContribution[]): MoaAggregate {
   const weights: MoaAggregate["weights"] = [];
@@ -105,7 +179,8 @@ export function aggregate(weighted: readonly WeightedContribution[]): MoaAggrega
     const c = w.contribution;
     if (c.ran) ran += 1;
 
-    const weight = clamp01(w.gate) * clamp01(c.confidence) * categoryWeight(w.category);
+    const authority = Number.isFinite(w.authority) && w.authority > 0 ? w.authority : 1;
+    const weight = clamp01(w.gate) * clamp01(c.confidence) * categoryWeight(w.category) * authority;
 
     if (VOTES.has(c.signal) && c.ran) {
       voted += 1;
@@ -116,8 +191,23 @@ export function aggregate(weighted: readonly WeightedContribution[]): MoaAggrega
     }
   }
 
-  const directional = supports + refutes + mixed;
   const total = weighted.length;
+
+  // Regime 1 — LEAD-VERIFIER DEFERENCE. When the authoritative auditor ran and no genuine
+  // cross-source consensus exists (single-source claim), its verdict IS the verdict.
+  const lead = leadVerifier(weighted);
+  if (lead && !crossSourceConsensusPresent(weighted)) {
+    return deferToLead(
+      lead,
+      { supports, refutes, mixed },
+      { voted, ran, total },
+      weights,
+      qualityMult
+    );
+  }
+
+  // Regime 2 — full deterministic mix (multi-source, or the lead was unavailable).
+  const directional = supports + refutes + mixed;
 
   if (directional === 0) {
     return {

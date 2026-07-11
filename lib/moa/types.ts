@@ -228,6 +228,12 @@ export interface MoaAgent {
   name: string;
   category: AgentCategory;
   description: string;
+  // Relative AUTHORITY of this agent's vote in the deterministic mix (default 1). A mixture of
+  // EXPERTS is not a mixture of equals: the primary-source auditor (full extract -> audit ->
+  // ground -> reconcile) is far more authoritative than a single enricher signal, so it carries
+  // more weight and is not out-voted by a crowd of weaker agents. Multiplies the vote weight in
+  // aggregate.ts. Deterministic and fixed per agent — never learned, never LLM-set.
+  authority?: number;
   // Artifact kinds this agent WRITES (used to order the DAG + let consumers depend on it).
   produces: readonly ArtifactKind[];
   // Artifact kinds this agent READS (soft deps: it runs after producers of these, but may
