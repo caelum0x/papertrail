@@ -74,28 +74,85 @@ export const NEGATION_CUES: readonly string[] = [
   "does not cause",
   "no increased risk",
   "not linked",
+  "negligible",
+  "ruled out",
+  "devoid of",
+  "absent",
 ] as const;
 
 function escapeRegExp(literal: string): string {
   return literal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/**
- * Deterministically classify a claim's polarity from the negation-cue lexicon. A claim is
- * NEGATIVE when it denies the effect it names. Whole-token matching (JS `\b`-style boundaries
- * via lookarounds on word chars) so substrings like "notable" never false-trip. Mirrors
- * detect_polarity() in papertrail_negation.py — same cues, same rule, same result.
- */
-export function detectPolarity(claim: string): { polarity: ClaimPolarity; cues: string[] } {
-  const lowered = claim.toLowerCase();
-  const cues: string[] = [];
+// Contrastive / coordinating markers after which a negation scopes to a SECONDARY clause, not
+// the claim's primary assertion. In "Drug X reduced mortality but not blood pressure" the "not"
+// denies blood pressure, not mortality, so polarity is decided on the PRIMARY (first) clause.
+const CONTRAST_MARKERS: readonly string[] = [
+  " but ",
+  " however",
+  " whereas ",
+  " though ",
+  " although ",
+  " while ",
+  " except ",
+  " rather than ",
+  "; ",
+];
+
+// The claim text up to the first contrastive marker — the primary assertion whose polarity
+// the source is judged against.
+function primaryClause(lowered: string): string {
+  let cut = lowered.length;
+  for (const marker of CONTRAST_MARKERS) {
+    const i = lowered.indexOf(marker);
+    if (i >= 0 && i < cut) cut = i;
+  }
+  return lowered.slice(0, cut);
+}
+
+// Count DISTINCT negation instances in the text, merging overlapping cue matches so a compound
+// cue ("did not") and the bare cue it contains ("not") count as ONE negation, not two — this is
+// essential for the parity rule below to be correct.
+function negationInstances(text: string): { count: number; cues: string[] } {
+  const spans: Array<{ start: number; end: number; cue: string }> = [];
   for (const cue of NEGATION_CUES) {
-    const pattern = new RegExp(`(?<!\\w)${escapeRegExp(cue)}(?!\\w)`);
-    if (pattern.test(lowered)) {
-      cues.push(cue);
+    const pattern = new RegExp(`(?<!\\w)${escapeRegExp(cue)}(?!\\w)`, "g");
+    let m: RegExpExecArray | null;
+    while ((m = pattern.exec(text)) !== null) {
+      spans.push({ start: m.index, end: m.index + m[0].length, cue });
+      if (m.index === pattern.lastIndex) pattern.lastIndex++; // guard against zero-width loops
     }
   }
-  return { polarity: cues.length > 0 ? "negative" : "positive", cues };
+  // Sort by start, then longest-first, and merge overlapping spans into single instances.
+  spans.sort((a, b) => a.start - b.start || b.end - a.end);
+  const merged: Array<{ end: number; cue: string }> = [];
+  for (const s of spans) {
+    const last = merged[merged.length - 1];
+    if (last && s.start < last.end) {
+      if (s.end > last.end) last.end = s.end; // extend the merged instance
+    } else {
+      merged.push({ end: s.end, cue: s.cue });
+    }
+  }
+  return { count: merged.length, cues: merged.map((s) => s.cue) };
+}
+
+/**
+ * Deterministically classify a claim's polarity from the negation-cue lexicon. A claim is
+ * NEGATIVE when it denies the effect it names. Two refinements over a naive "any cue present"
+ * rule, both of which otherwise INVERT the final support/refute verdict:
+ *   1. SCOPE: polarity is decided on the PRIMARY clause (before any contrastive marker), so a
+ *      negation scoped to a secondary clause ("...but not Y") does not flip the whole claim.
+ *   2. PARITY: an EVEN number of negations cancel (double negation "not without benefit" is
+ *      positive); an ODD number denies the effect. Overlapping cues ("did not" ⊃ "not") are
+ *      merged so they count once.
+ * Whole-token matching (word-boundary lookarounds) keeps "notable" from tripping "not".
+ */
+export function detectPolarity(claim: string): { polarity: ClaimPolarity; cues: string[] } {
+  const primary = primaryClause(claim.toLowerCase());
+  const { count, cues } = negationInstances(primary);
+  const polarity: ClaimPolarity = count % 2 === 1 ? "negative" : "positive";
+  return { polarity, cues };
 }
 
 // ---------------------------------------------------------------------------

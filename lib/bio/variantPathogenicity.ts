@@ -64,7 +64,10 @@ const SIGNIFICANCE_RULES: ReadonlyArray<{
   { test: (s) => s.includes("conflicting"), tier: "Conflicting" },
   { test: (s) => s.includes("likely pathogenic") && !s.includes("pathogenic/"), tier: "Likely pathogenic" },
   { test: (s) => s.includes("pathogenic"), tier: "Pathogenic" },
-  { test: (s) => s.includes("likely benign"), tier: "Likely benign" },
+  // Symmetric with the pathogenic side: a combined "Benign/Likely benign" resolves to the
+  // STRONGER tier ("Benign"), so a benign claim against ClinVar's real "Benign/Likely benign"
+  // aggregate is not spuriously downgraded to overstated_certainty.
+  { test: (s) => s.includes("likely benign") && !s.includes("benign/"), tier: "Likely benign" },
   { test: (s) => s.includes("benign"), tier: "Benign" },
   {
     test: (s) =>
