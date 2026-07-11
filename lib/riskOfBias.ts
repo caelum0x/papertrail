@@ -398,9 +398,15 @@ function gradeStepsFromDomains(domains: readonly RobDomain[]): number {
   const highCriticalCount = domains.filter(
     (d) => CRITICAL_DOMAINS.has(d.name) && d.judgement === "high"
   ).length;
-  if (highCriticalCount >= 2) return 2;
-  if (highCriticalCount === 1) return 1;
-  return 0;
+  const steps = highCriticalCount >= 2 ? 2 : highCriticalCount === 1 ? 1 : 0;
+  // CONSISTENCY with overallJudgement: when the overall judgement escalates to 'high' via the
+  // pragmatic-flag path (a critical some-concerns domain compounded by small-sample / early-
+  // stopping / funding concerns) but no single critical domain is judged 'high', the trial is
+  // still OVERALL high risk of bias and must downgrade at least one GRADE step. Without this a
+  // trial the engine reports as overall:high would contribute gradeSteps:0 — an internal
+  // contradiction where high-bias evidence silently downgrades nothing.
+  if (steps === 0 && overallJudgement(domains) === "high") return 1;
+  return steps;
 }
 
 /**

@@ -129,10 +129,15 @@ export function requiredInformationSize(
   const delta = p1 - p2;
 
   const variancePart = p1 * (1 - p1) + p2 * (1 - p2);
+  // Standard per-arm sample size for a two-proportion superiority test (Cochrane / standard
+  // power analysis): n_arm = (z_{α/2}+z_β)²·(p1(1-p1)+p2(1-p2)) / (p1-p2)². `base` IS n_arm.
   const base = ((zAlpha + zBeta) ** 2 * variancePart) / delta ** 2;
 
-  // The task formula: n = base · 2 (per group), total = 2 · perGroup.
-  let risPerGroup = base * 2;
+  // Per group = n_arm; total = 2·n_arm. A prior version doubled BOTH (risPerGroup = 2·base,
+  // risTotal = 4·base), inflating the required information size 2× and biasing every TSA
+  // verdict toward "insufficient information". The required information size is the total
+  // enrollment of a single adequately-powered trial: 2·n_arm.
+  let risPerGroup = base;
 
   const diversityAdjusted = typeof iSquared === "number" && iSquared > 0;
   if (diversityAdjusted) {
@@ -155,15 +160,18 @@ export function requiredInformationSize(
 // ---------------------------------------------------------------------------
 
 /**
- * Two-sided O'Brien–Fleming alpha-spending Z boundary at information fraction t,
- * using the Lan–DeMets OBF approximation:
+ * Two-sided O'Brien–Fleming-TYPE Z boundary at information fraction t:
  *
  *   Z(t) = z_{alpha/4} / sqrt(t)
  *
- * z_{alpha/4} is the upper alpha/4 normal quantile = Phi⁻¹(1 - alpha/4). The
- * boundary is very large for small t (few data → demand overwhelming evidence)
- * and relaxes toward z_{alpha/4} as t → 1. For the conventional alpha = 0.05
- * this gives z_{0.0125} = Phi⁻¹(0.9875) ≈ 2.2414 at t = 1.
+ * IMPORTANT — this is a simple, CONSERVATIVE closed-form approximation of the O'Brien–Fleming
+ * boundary shape, NOT a full Lan–DeMets alpha-spending computation (which numerically solves
+ * for each look's nominal level under the sequential covariance structure). Because it uses
+ * z_{alpha/4} rather than z_{alpha/2}, the final-look boundary is ≈2.2414 at t = 1 for
+ * alpha = 0.05 (a per-look level ≈0.025), so it demands slightly stronger final evidence than
+ * a fixed 1.96 test — deliberately conservative, guarding against premature "conclusive"
+ * calls. It is very large for small t (few data → demand overwhelming evidence). Treat crossing
+ * this boundary as strong evidence; not crossing it near t = 1 is NOT proof of no effect.
  */
 export function obrienFlemingBoundary(
   input: ObrienFlemingBoundaryInput

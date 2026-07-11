@@ -167,8 +167,13 @@ export function hedgesG(study: ContinuousStudyInput): HedgesGEffect {
   const d = (study.meanT - study.meanC) / pooledSd;
   const j = 1 - 3 / (4 * dfPooled - 1);
   const g = j * d;
+  // Variance of Hedges' g (Borenstein, Introduction to Meta-Analysis, Eq. 4.20–4.24; Cochrane
+  // Handbook §6.5.1.3): Var(g) = J²·[ (nT+nC)/(nT·nC) + d²/(2·(nT+nC)) ]. The second-term
+  // denominator is 2·N (total sample), NOT 2·(N−2) — the latter slightly over-inflates the
+  // variance for small, large-effect studies.
+  const nTotal = study.nT + study.nC;
   const variance =
-    j * j * ((study.nT + study.nC) / (study.nT * study.nC) + (d * d) / (2 * dfPooled));
+    j * j * (nTotal / (study.nT * study.nC) + (d * d) / (2 * nTotal));
   const se = Math.sqrt(variance);
   const z = ciZ(DEFAULT_CI_PCT);
   return {

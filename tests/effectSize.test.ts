@@ -77,6 +77,27 @@ describe("reconcile", () => {
     expect(r.claimedValue).toBe(25);
   });
 
+  // Regression: a claim whose implied effect sits INSIDE the source's own 95% CI must NOT be
+  // flagged as overstated, even when it exceeds the source point by more than the materiality
+  // factor. The CI is the authoritative decision boundary; flagging a CI-compatible claim was a
+  // false positive on marginally-significant small-effect trials (statins/aspirin, RR ~0.90-0.95).
+  it("does NOT flag a claim that falls within the source's significant 95% CI", () => {
+    const r = reconcile(
+      "The drug reduced events by 8%.",
+      "The drug reduced events (risk ratio 0.95, 95% CI 0.90 to 0.998)."
+    );
+    expect(r.verdict).toBe("consistent");
+  });
+
+  // Counterpart: a claim implying an effect STRONGER than the CI lower bound is still flagged.
+  it("still flags a claim that exceeds the source's 95% CI lower bound", () => {
+    const r = reconcile(
+      "The drug reduced events by 50%.",
+      "The drug reduced events (risk ratio 0.95, 95% CI 0.90 to 0.998)."
+    );
+    expect(r.verdict).toBe("magnitude_overstated");
+  });
+
   it("returns consistent when a ~25% claim matches an HR 0.75 source", () => {
     const r = reconcile(
       "The treatment reduced events by about 25%.",

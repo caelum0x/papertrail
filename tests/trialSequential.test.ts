@@ -14,7 +14,9 @@ describe("requiredInformationSize — hand-checkable RIS oracle", () => {
     // p2 = 0.10, p1 = 0.10 * (1 - 0.25) = 0.075, delta = -0.025.
     // z_{0.025} = 1.959964, z_{0.80} = 0.841621, (za+zb)^2 = 7.848878.
     // variancePart = 0.075*0.925 + 0.10*0.90 = 0.069375 + 0.09 = 0.159375.
-    // base = 7.848878 * 0.159375 / 0.025^2 = 2001.4643; perGroup = 2*base ≈ 4002.93.
+    // base = 7.848878 * 0.159375 / 0.025^2 = 2001.4643 = the per-arm sample size (n_arm).
+    // Required information size = a single adequately-powered trial: perGroup = n_arm,
+    // total = 2*n_arm. (A prior version doubled both, giving 4003 / 8006 — a 2x inflation.)
     const r = requiredInformationSize({
       controlRisk: 0.1,
       relativeRiskReduction: 0.25,
@@ -23,8 +25,8 @@ describe("requiredInformationSize — hand-checkable RIS oracle", () => {
     });
     expect(r.p2).toBeCloseTo(0.1, 10);
     expect(r.p1).toBeCloseTo(0.075, 10);
-    expect(r.risPerGroup).toBe(4003); // ceil(4002.93)
-    expect(r.risTotal).toBe(8006);
+    expect(r.risPerGroup).toBe(2002); // ceil(2001.4643)
+    expect(r.risTotal).toBe(4003); // ceil(4002.93)
     expect(r.diversityAdjusted).toBe(false);
   });
 

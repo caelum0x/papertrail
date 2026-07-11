@@ -3,10 +3,16 @@
 //
 // This is the layer a generic LLM claim-checker structurally cannot reproduce:
 // rather than asking a model whether "the literature looks cherry-picked", it
-// runs Egger's regression test for funnel-plot asymmetry over the registered/
-// reported effect estimates — the exact closed form implemented by reference
-// tools (metafor's `regtest`, RevMan). No LLM is in the numeric loop; every
-// number is reproducible from the inputs.
+// runs the CLASSIC Egger regression test for funnel-plot asymmetry (OLS of each
+// study's standard normal deviate on its precision) over the registered/reported
+// effect estimates. This is the original Egger et al. 1997 form; note it is not
+// bit-identical to metafor's default `regtest` (which offers a weighted variant
+// regressing the effect on its standard error). No LLM is in the numeric loop;
+// every number is reproducible from the inputs.
+//
+// METHODOLOGICAL NOTE: funnel-plot asymmetry tests are underpowered and should be
+// interpreted with caution below ~10 studies (Sterne et al. 2011 / Cochrane §13);
+// the GRADE layer gates any automated downgrade behind that threshold.
 //
 // Egger's test regresses the standard normal deviate of each study
 // (SND_i = yi / se_i) on its precision (1 / se_i) by ordinary least squares.

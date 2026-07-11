@@ -279,20 +279,27 @@ export function reconcile(claim: string, sourceText: string): Reconciliation {
   const sourceReduction =
     source.measure === "RRR" ? source.point : ratioToReductionPercent(source.point);
 
-  // (1) MAGNITUDE OVERSTATED: claimed relative reduction materially exceeds the
-  // source's, either by clearing the materiality factor or by falling outside a
-  // significant CI on the ratio measure.
-  const factorExceeded =
-    sourceReduction > 0 && claimedReduction > sourceReduction * OVERSTATE_FACTOR;
+  // (1) MAGNITUDE OVERSTATED. When the source reports a 95% CI on a ratio measure, that CI
+  // is the AUTHORITATIVE decision boundary: a claim is overstated only if its implied effect
+  // is stronger than the CI's lower bound. A claim that lands INSIDE the source's own 95% CI
+  // is statistically compatible with the source by definition, so it must never be flagged.
+  const hasUsableRatioCi =
+    RATIO_MEASURES.has(source.measure) && source.ciLow !== null;
   const ciExcluded =
-    RATIO_MEASURES.has(source.measure) &&
-    source.ciLow !== null &&
+    hasUsableRatioCi &&
     !ratioCiCrossesNull(source) &&
-    // claimed ratio point below the CI lower bound = stronger effect than CI allows
-    (() => {
-      const claimedRatioPoint = 1 - claimedReduction / 100;
-      return claimedRatioPoint < (source.ciLow as number);
-    })();
+    // claimed ratio point below the CI lower bound = stronger effect than the CI allows
+    1 - claimedReduction / 100 < (source.ciLow as number);
+
+  // The bare materiality-factor heuristic is a FALLBACK, used ONLY when the source gave no
+  // usable CI to decide with. Previously it ran unconditionally and flagged claims that sat
+  // inside the source's CI (e.g. an 8% claim against RR 0.95, 95% CI 0.90–0.998) — a false
+  // "overstated" verdict on exactly the marginally-significant small-effect trials PaperTrail
+  // must judge correctly. Gating it behind "no CI present" removes that false positive.
+  const factorExceeded =
+    !hasUsableRatioCi &&
+    sourceReduction > 0 &&
+    claimedReduction > sourceReduction * OVERSTATE_FACTOR;
 
   if (factorExceeded || ciExcluded) {
     return overstated(source, sourceReduction, claimedReduction, claim);

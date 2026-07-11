@@ -26,14 +26,16 @@ describe("meanDifference — Welch-style MD oracle", () => {
 
 describe("hedgesG — SMD with small-sample J correction oracle", () => {
   it("g = J·d with J = 1 − 3/(4·df−1) and the Var(g) closed form", () => {
-    // meanT=10 sdT=2 nT=20 | meanC=7 sdC=2.5 nC=20; df = 38.
+    // meanT=10 sdT=2 nT=20 | meanC=7 sdC=2.5 nC=20; df = 38, N = 40.
     // pooledSD = sqrt((19·4 + 19·6.25)/38) = sqrt(5.125) = 2.26385...
     // d = 3 / 2.26385 = 1.325178; J = 1 − 3/151 = 0.980132; g = 1.298850.
-    // Var(g) = J²·( 40/400 + d²/76 ) = 0.118263; SE = 0.343895.
+    // Var(g) = J²·( (nT+nC)/(nT·nC) + d²/(2·(nT+nC)) ) = J²·( 40/400 + d²/80 )  [Borenstein
+    // Eq. 4.24 / Cochrane §6.5.1.3 — second-term denominator is 2·N, not 2·df] = 0.117153;
+    // SE = 0.342276.
     const e = hedgesG({ label: "g", meanT: 10, sdT: 2, nT: 20, meanC: 7, sdC: 2.5, nC: 20 });
     expect(e.g).toBeCloseTo(1.2989, 3);
-    expect(e.variance).toBeCloseTo(0.11826, 4);
-    expect(e.se).toBeCloseTo(0.34389, 4);
+    expect(e.variance).toBeCloseTo(0.11715, 4);
+    expect(e.se).toBeCloseTo(0.34228, 4);
     // The J correction shrinks g toward 0 relative to the raw d (1.3252).
     expect(e.g).toBeLessThan(1.3252);
   });

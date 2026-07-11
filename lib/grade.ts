@@ -192,22 +192,32 @@ function imprecisionDowngrade(input: GradeInput): Downgrade | null {
     );
   }
 
-  // Wide ratio CI: upper bound spans an appreciable multiple of the lower bound.
-  // Only meaningful for a positive-bounded (ratio-scale) CI.
+  // A ratio CI bound "approaches the null" when it sits within ~10% of no-effect (0.9–1.11 on
+  // the ratio scale). A numerically wide ratio CI is a genuine imprecision concern ONLY when it
+  // stretches from an appreciable effect to a bound near the null (decision uncertainty). A wide
+  // CI whose bounds are BOTH decisively away from the null (e.g. RR 0.30, 95% CI 0.15–0.60) is
+  // still decisive, and GRADE does not downgrade it for imprecision — the old rule did, spuriously.
+  const NEAR_NULL_LOW = 0.9;
+  const NEAR_NULL_HIGH = 1 / 0.9; // ≈1.111 — symmetric on the ratio scale
+  const boundNearNull = (b: number) => b >= NEAR_NULL_LOW && b <= NEAR_NULL_HIGH;
   const ratioWide =
-    input.ciLower > 0 && input.ciUpper >= input.ciLower * RATIO_CI_WIDE_FACTOR;
+    input.ciLower > 0 &&
+    input.ciUpper >= input.ciLower * RATIO_CI_WIDE_FACTOR &&
+    (input.ciCrossesNull ||
+      boundNearNull(input.ciLower) ||
+      boundNearNull(input.ciUpper));
   if (ratioWide) {
     steps += 1;
     reasons.push(
-      `the 95% CI spans an appreciable range (upper bound ${round(input.ciUpper, 3)} is ` +
+      `the 95% CI spans an appreciable range toward the null (upper bound ${round(input.ciUpper, 3)} is ` +
         `>= ${RATIO_CI_WIDE_FACTOR}x the lower bound ${round(input.ciLower, 3)})`
     );
   }
 
-  // GRADE treats "optimal information size not met" as a 1-step imprecision
-  // downgrade on its own. A very small N is more serious, but GRADE only
-  // escalates it to 2 steps when it CO-OCCURS with another imprecision trigger
-  // (a null-crossing or wide CI) — a very small N alone is still a single step.
+  // GRADE treats "optimal information size not met" as a 1-step imprecision downgrade on its
+  // own (a documented, widely-used OIS proxy for imprecision). A very small N is more serious,
+  // escalating to 2 steps only when it CO-OCCURS with another imprecision trigger (a
+  // null-crossing or a wide-toward-null CI); a very small N alone stays a single step.
   const otherImprecisionTrigger = input.ciCrossesNull || ratioWide;
   const totalN = input.totalN ?? null;
   if (totalN !== null && totalN < OIS_VERY_SMALL_N) {
@@ -242,9 +252,17 @@ function imprecisionDowngrade(input: GradeInput): Downgrade | null {
 // null once the funnel is filled) so the downgrade is fully defensible. Returns
 // null when the test cannot run (fewer than three usable studies) or finds no
 // asymmetry — an honest "no downgrade" rather than a forced one. Deterministic.
+// Minimum studies before a funnel-plot asymmetry test may drive an automated certainty
+// downgrade. Sterne et al. 2011 / Cochrane Handbook §13: tests for funnel asymmetry are
+// underpowered and uninterpretable with fewer than ~10 studies, so running Egger below this
+// and acting on it is methodologically unsound. Below the threshold we return "no downgrade"
+// (honest) rather than penalizing the body of evidence on an uninterpretable test.
+const MIN_STUDIES_FOR_PUBLICATION_BIAS = 10;
+
 function derivedPublicationBiasDowngrade(
   studyEffects: readonly StudyEffect[]
 ): Downgrade | null {
+  if (studyEffects.length < MIN_STUDIES_FOR_PUBLICATION_BIAS) return null;
   const egger = eggersTest(studyEffects);
   if (egger === null || !egger.asymmetry) return null;
 
