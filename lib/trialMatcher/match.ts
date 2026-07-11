@@ -91,12 +91,12 @@ export async function runTrialMatch(
   const assessLlm = opts?.assessLlm;
 
   // Assess each candidate independently and tolerate per-trial failures: a quota hit or error
-  // on one trial degrades that trial (dropped from the shortlist) without sinking the others.
-  // We track the WORST failure reason seen so the run reports it once. `quota` outranks a plain
-  // `error` because it is the more specific, more actionable explanation for the coordinator.
-  let degraded: DegradedReason | null = null;
+  // on one trial drops that trial from the shortlist without sinking the others.
+  let sawQuota = false;
+  let sawError = false;
   const recordFailure = (reason: DegradedReason) => {
-    if (reason === "quota" || degraded === null) degraded = reason;
+    if (reason === "quota") sawQuota = true;
+    else sawError = true;
   };
 
   const settled = await Promise.all(
@@ -118,6 +118,17 @@ export async function runTrialMatch(
 
   // Sort by eligibility fit, best first. Stable enough for a shortlist; ties keep search order.
   const ranked = [...matches].sort((a, b) => b.eligibility_score - a.eligibility_score);
+
+  // Degraded-mode reporting reflects what the coordinator actually got. A usage cap always
+  // surfaces (it's actionable and usually affects the whole run). But a plain per-trial error
+  // — an occasional malformed-JSON assessment that we already dropped — should only flip the
+  // run to degraded when it cost us EVERY match; otherwise the shortlist is real and the scary
+  // "eligibility unavailable" banner would misrepresent a working result.
+  const degraded: DegradedReason | null = sawQuota
+    ? "quota"
+    : sawError && ranked.length === 0
+      ? "error"
+      : null;
 
   return { profile, matches: ranked, droppedUngrounded, degraded };
 }

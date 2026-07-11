@@ -99,8 +99,17 @@ const defaultLlm: AssessLlm = (params) =>
     system: params.system,
     user: params.user,
     schema: TrialAssessmentLlmOutputSchema,
-    maxTokens: 3072,
+    // Headroom for a per-criterion object each: a trial with many criteria produced a long
+    // JSON array that truncated at the old 3072 budget, so the response failed to parse and
+    // the whole trial degraded. Paired with the MAX_CRITERIA_PER_TYPE cap in assessTrial.
+    maxTokens: 4096,
   });
+
+// Trials occasionally list dozens of eligibility criteria; assessing all of them produces a
+// JSON array long enough to overrun the token budget and fail to parse. We assess the leading
+// (most decision-relevant) criteria of each type — enough for a faithful eligibility read on
+// real trials without truncating the model's response.
+const MAX_CRITERIA_PER_TYPE = 15;
 
 const SYSTEM_PROMPT = `You are a clinical research coordinator assessing whether a de-identified patient is eligible for a clinical trial. You are given the patient's structured profile and the trial's parsed inclusion and exclusion criteria. For EACH criterion, decide whether it is met, not_met, or unknown for THIS patient.
 
@@ -258,7 +267,12 @@ export async function assessTrial(
   candidate: TrialCandidate,
   opts?: { llm?: AssessLlm }
 ): Promise<TrialMatch> {
-  const parsed = parseEligibility(candidate.eligibilityCriteria);
+  const allParsed = parseEligibility(candidate.eligibilityCriteria);
+  // Bound the criteria sent to Claude so the response can't truncate (see MAX_CRITERIA_PER_TYPE).
+  const parsed = {
+    inclusion: allParsed.inclusion.slice(0, MAX_CRITERIA_PER_TYPE),
+    exclusion: allParsed.exclusion.slice(0, MAX_CRITERIA_PER_TYPE),
+  };
 
   // No criteria to assess — don't invent a match. Honest "unknown".
   if (parsed.inclusion.length === 0 && parsed.exclusion.length === 0) {

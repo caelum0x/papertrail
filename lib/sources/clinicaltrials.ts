@@ -233,12 +233,59 @@ export interface TrialCandidate {
  * TrialCandidate shape (raw criteria text preserved for verbatim grounding) rather than the
  * pooled-summary TrialRecord shape used by the verification pipeline.
  */
+// ClinicalTrials.gov's Essie `query.term` ANDs its space-separated terms, so a long, specific
+// term list both (a) 400s past ~10 terms and (b) over-constrains to zero matches well before
+// that. A rich patient profile produces exactly such a term soup, which silently zeroed out the
+// whole trial search. So we PROGRESSIVELY BROADEN: try the fullest safe query, then fewer and
+// fewer leading terms, and return the first attempt that actually matches trials. We only throw
+// if EVERY attempt errored (an honest degrade); if searches succeeded but nothing matched, we
+// return [] (an honest no-match), never fabricating a result.
+// Max terms before Essie 400s is ~10; the ladder below that broadens toward a match.
+const MAX_SAFE_TERMS = 10;
+const QUERY_TERM_LADDER = [6, 4, 3, 2] as const;
+
 export async function searchTrialsForMatching(
   query: string,
   pageSize = 6
 ): Promise<TrialCandidate[]> {
+  const words = query.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [];
+
+  // Distinct term counts to try, most-specific-but-safe first, each no larger than the query.
+  // Start at min(words, 10) — the fullest query that won't 400 — then broaden down the ladder.
+  const caps = Array.from(
+    new Set(
+      [Math.min(words.length, MAX_SAFE_TERMS), ...QUERY_TERM_LADDER].filter(
+        (n) => n >= 1 && n <= words.length
+      )
+    )
+  ).sort((a, b) => b - a);
+
+  let lastError: unknown = null;
+  let anySucceeded = false;
+  for (const n of caps) {
+    const term = words.slice(0, n).join(" ");
+    try {
+      const results = await fetchMatchingTrials(term, pageSize);
+      anySucceeded = true;
+      if (results.length > 0) return results;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  // Every attempt threw (e.g. CT.gov down): surface it so the run degrades honestly.
+  if (!anySucceeded && lastError) throw lastError;
+  // Searches ran but nothing matched across all broadenings: honest empty result.
+  return [];
+}
+
+async function fetchMatchingTrials(
+  term: string,
+  pageSize: number
+): Promise<TrialCandidate[]> {
   const params = new URLSearchParams({
-    "query.term": query,
+    "query.term": term,
     pageSize: String(pageSize),
     format: "json",
     fields: [
