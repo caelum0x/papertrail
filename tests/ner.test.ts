@@ -126,15 +126,19 @@ describe("findAbbreviations + abbreviation-resolved linking", () => {
 });
 
 describe("recognizeEntities — honest empty degradation", () => {
-  it("returns an empty result when the extractor fails, never fabricating entities", async () => {
+  it("throws a labeled error when the extractor fails, never fabricating entities", async () => {
+    // Contract: a FAILED extractor surfaces a labeled error (so the MoA scispaCy trace and
+    // observability see it) rather than silently returning empty — every caller guards this
+    // boundary and degrades to honest-empty itself (see ner.ts). The guarantee preserved here
+    // is "never fabricate entities": on failure it throws, it does not invent a result.
     const failing: NerDeps = {
       extractMentions: async () => {
         throw new Error("LLM unavailable");
       },
     };
-    const result = await recognizeEntities({ text: "metformin lowers HbA1c." }, failing);
-    expect(result.entities).toEqual([]);
-    expect(result.linkedCount).toBe(0);
+    await expect(
+      recognizeEntities({ text: "metformin lowers HbA1c." }, failing)
+    ).rejects.toThrow(/NER extraction failed/);
   });
 
   it("returns empty for blank input without calling the extractor", async () => {
