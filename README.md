@@ -9,6 +9,7 @@
 
 <p align="center">
   <a href="https://papertrail-topaz-phi.vercel.app"><strong>▶ Live app</strong></a> ·
+  <a href="#demo"><strong>▶ Watch the demo</strong></a> ·
   Next.js 16 · Postgres/pgvector · Anthropic Claude · Apache-2.0
 </p>
 
@@ -20,6 +21,7 @@
 
 ## Table of contents
 
+- [Demo](#demo)
 - [What it is](#what-it-is)
 - [The moat: deterministic verification, not vibes](#the-moat-deterministic-verification-not-vibes)
 - [Evaluation &amp; limitations (read this)](#evaluation--limitations-read-this)
@@ -36,6 +38,24 @@
 - [API reference](#api-reference)
 - [Architecture &amp; docs](#architecture--docs)
 - [License &amp; attribution](#license--attribution)
+
+---
+
+## Demo
+
+A ~45-second walkthrough of the **live app**: catching an overstated lecanemab claim (grounded to the primary source), turning dictated bench notes into a reproducible record, matching a de-identified patient to clinical trials with per-criterion eligibility, and the Mixture-of-Agents verdict refuting a population-overgeneralized claim.
+
+<video src="https://github.com/caelum0x/papertrail/raw/main/demo-video/papertrail-demo.mp4" controls muted width="100%" poster="demo-video/still-verify.png"></video>
+
+> If the player doesn't render (some markdown viewers strip `<video>`), **[watch / download the MP4 here](demo-video/papertrail-demo.mp4)**.
+
+<p align="center">
+  <a href="demo-video/papertrail-demo.mp4">
+    <img src="demo-video/still-verify.png" alt="PaperTrail demo — click to watch" width="88%" />
+  </a>
+</p>
+
+Every screen is the real pipeline running against live PubMed / ClinicalTrials.gov and the Claude API — not a mockup. Deterministic math decides each verdict; Claude only writes the grounded narrative.
 
 ---
 
